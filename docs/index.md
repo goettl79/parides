@@ -10,5 +10,5 @@ Export all metrics there are from the last 20 minutes to a local timeseries fold
 
 It makes most sense to export only a subset of the metrics. Use promql for it.
 
-    python3 -m parides.cli.main http://127.0.0.1:9090 {__name__=~\".+\"} --id=http
+    python3 -m parides.cli.main http://127.0.0.1:9090 {__name__=~\"http.*\"} --id=http
 
