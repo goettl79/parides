@@ -18,17 +18,7 @@ def data_to_csv(url,
                 start_time=(dt.utcnow() - timedelta(hours=1)),
                 end_time=dt.utcnow(),
                 resolution="1m"):
-    """
-    :param url: prometheus url
-    :param directory: storage basedir
-    :param dataset_id: dataset id
-    :param metrics_query: query to use
-    :param start_time: start time
-    :param end_time: end_time
-    :param resolution: 1m, 10s
-    :param labels_query: A special query to order the
-    :return:
-   """
+  
     time_id_prefix = "{}-{}".format(start_time.timestamp(), end_time.timestamp())
     prefix = hashlib.sha1(time_id_prefix.encode("UTF-8")).hexdigest()[:4]
 
