@@ -3,4 +3,4 @@ WORKDIR /usr/src/app
 COPY requirements.txt ./
 RUN pip install --no-cache-dir -r requirements.txt
 COPY . .
-CMD [ "python", "-m" , "parides.cli.main" ]
+ENTRYPOINT [ "python3", "-m" , "parides.cli.main" ]
