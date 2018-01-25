@@ -14,6 +14,7 @@ Alternatively, if you prefer docker do:
 
 
     docker run \
+        -u $(id -u):$(id -g) \
         -v $(pwd)/timeseries:/usr/src/app/timeseries \
         -i goettl/parides \
             http://192.168.2.110:9090 {__name__=~\".+\"} \
