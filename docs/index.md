@@ -1,8 +1,16 @@
-# Python
+# Python / Panda
 
-TODO
+Install package with pip. 
 
-# Console 
+    pip install parides
+
+Use it like this will return you a dataframe from the Prometheus endpoint
+
+    from parides.converter import data_from_prometheus
+    
+    df = data_from_prometheus(url="192.168.2.111",query="{__name__=~\".+\"}")
+
+# Console  / CSV
 
 Export all metrics there are from the last 20 minutes to a local timeseries folder
 
