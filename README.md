@@ -13,5 +13,4 @@ command below:
             --delta=20 
 
 
-Further examples are currently under construction in the [documentation](https://goettl79.github.io/parides/) 
-section.
+Further examples are currently under construction in the [documentation](https://goettl79.github.io/parides/) section.
