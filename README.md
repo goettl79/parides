@@ -1,7 +1,7 @@
 # Parides
 
-Parides is a simple python module to convert Prometheus metrics data to apanda frame or a comma-separated file. For a 
-jumpstart use docker command below:
+Parides is a simple python module to convert Prometheus metrics data to apanda frame or a comma-separated file.
+For a jumpstart / converting to csv at the console use the docker command below. 
 
     docker run \
         -u $(id -u):$(id -g) \
