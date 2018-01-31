@@ -1,10 +1,10 @@
-# Python / Panda
+# Python / Panda Dataframe
 
 Install package with pip. 
 
     pip install parides
 
-Use it like this will return you a dataframe from the Prometheus endpoint
+Method ```data_from_prometheus``` returns a panda dataframe with Prometheus metrics. 
 
     from parides.converter import data_from_prometheus
     
