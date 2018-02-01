@@ -103,8 +103,9 @@ def data_from_prom_api_response(prom_api_response):
 
         __convert_timeseries(col_pos_index, data_frame, metric_name, metric_scrape_id, prom_metric)
 
-    data_frame.fillna(0, inplace=True)
-    data_frame.set_index('time',inplace=True)
+    # TODO
+    if data_frame.size > 0:
+        data_frame.set_index('time',inplace=True)
     data_frame.sort_index(inplace=True)
     return data_frame
 
