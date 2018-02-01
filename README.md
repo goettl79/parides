@@ -8,7 +8,7 @@ folder prefixed with an "all".
         -v /tmp:/usr/src/app/timeseries \
         -i goettl/parides \
             http://192.168.2.110:9090 {__name__=~\".+\"} \
-            --id=all \
+            --dsid=all \
             --delta=20 
 
 
