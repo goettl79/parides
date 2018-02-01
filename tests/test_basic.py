@@ -4,12 +4,12 @@ import unittest
 
 import pandas as pd
 
-from parides.converter import data_from_prom_api_response, data_from_csv
+from parides.converter import data_from_prom_api_response
 
 
 class TestConversion(unittest.TestCase):
 
-    def test_index_row_is_time_row(self):
+    def test_time_row_is_index(self):
         metrics_data = data_from_prom_api_response(prom_api_response=json.loads(API_RESP_RAW_METRIC))
         self.assertEqual(metrics_data.index.name, 'time')
 
@@ -18,7 +18,7 @@ class TestConversion(unittest.TestCase):
             prom_api_response=json.loads(API_RESP_DERIVED_METRIC))
         self.assertTupleEqual(metrics_data.shape, (2, 2))
 
-    def test_parse_works_when_metric_is_empty(self):
+    def test_parse_returns_empty_df_when_no_metrics_found(self):
         metrics_data = data_from_prom_api_response(
             prom_api_response=json.loads(API_RESPONSE_EMPTY))
         self.assertTupleEqual(metrics_data.shape, (0, 0))
@@ -39,12 +39,12 @@ class TestConversion(unittest.TestCase):
         metrics_data = data_from_prom_api_response(prom_api_response=json.loads(API_RESP_RAW_METRIC))
         self.assertEqual(metrics_data['up:method_GET'].values[1], 4)
 
-    def test_metric_values_are_parsed_when_name_was_removed(self):
+    def test_metric_values_parsed_when_metric_name_was_removed(self):
         metrics_data = data_from_prom_api_response(prom_api_response=json.loads(API_RESP_DERIVED_METRIC))
         self.assertEqual(metrics_data['value_1'].values[0], 1)
         self.assertEqual(metrics_data['value_1'].values[1], 2)
 
-    def test_series_are_distinguished_by_labels(self):
+    def test_series_labels_are_flattened_as_column_names(self):
         metrics_data = data_from_prom_api_response(prom_api_response=json.loads(API_RESP_MULT_METRICS))
         self.assertEqual(metrics_data.shape, (4, 2), "Matrix shape doesn't look like two timeseries were exported.")
 
@@ -53,7 +53,6 @@ class TestConversion(unittest.TestCase):
         first_time = metrics_data.index[0]
         pythonDateTime = pd.Timestamp(first_time).to_pydatetime()
         self.assertEqual(pythonDateTime, datetime.datetime(year=2017, month=7, day=14, hour=4, minute=59))
-
 
 
 API_RESP_RAW_METRIC = """
