@@ -13,13 +13,8 @@ class ApiIntegration(unittest.TestCase):
         directory = 'container_metrics'
         dataset_id = "incident_1"
 
-        f = data_to_csv(url=PROMETHEUS_URL,
-                    directory=directory,
-                    metrics_query="up",
-                    start_time=TEST_TIME - timedelta(minutes=5),
-                    end_time=TEST_TIME,
-                    dataset_id=dataset_id,
-                    resolution="10s")
+        f = data_to_csv(url=PROMETHEUS_URL, metrics_query="up", dataset_id=dataset_id, directory=directory,
+                        start_time=TEST_TIME - timedelta(minutes=5), end_time=TEST_TIME, resolution="15s")
 
         with open(f, 'r') as X_data:
             self.assertTrue('time,id,up' in X_data.read())
