@@ -11,14 +11,9 @@ import pytz
 import requests
 
 
-def data_to_csv(url,
-                directory,
-                dataset_id,
-                metrics_query,
-                start_time=(dt.utcnow() - timedelta(hours=1)),
-                end_time=dt.utcnow(),
-                resolution="1m"):
-  
+def data_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts", start_time=(dt.utcnow() - timedelta(hours=1)),
+                end_time=dt.utcnow(), resolution="1m"):
+
     time_id_prefix = "{}-{}".format(start_time.timestamp(), end_time.timestamp())
     prefix = hashlib.sha1(time_id_prefix.encode("UTF-8")).hexdigest()[:4]
 
@@ -109,7 +104,7 @@ def data_from_prom_api_response(prom_api_response):
     return data_frame
 
 
-def __fetch_data(url, query, end_time, start_time, resolution="1m"):
+def __fetch_data(url, query, end_time, start_time, resolution="60"):
     url_new = '{0}/api/v1/query_range'.format(url)
     prom_response = requests.get(url_new,
                                  params={'query': query,
