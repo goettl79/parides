@@ -51,6 +51,7 @@ def data_from_prometheus(url, query, start_time=(dt.now() - timedelta(hours=1)),
                          end_time=dt.now(), resolution="1m"):
     start_time_ts = start_time.replace(tzinfo=pytz.UTC).isoformat()
     end_time_ts = end_time.replace(tzinfo=pytz.UTC).isoformat()
+    # TODO Pipeline Fetch / Decode here
     json_query_results = __fetch_data(url, query, end_time_ts, start_time_ts, resolution=resolution)
     # TODO Raise error here if query error / validate response
     X = data_from_prom_api_response(json_query_results)
