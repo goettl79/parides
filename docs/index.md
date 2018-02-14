@@ -31,3 +31,9 @@ Decrease data by increasing the sample rate of the query function with parameter
         -s 2017-04-28T11:50:00+00:00 \
         -e 2017-04-30T12:55:00+00:00 \
         -r 15m
+
+
+Query all alerts in a timeframe: 
+
+    python3 -m parides.cli http://192.168.1.100:9090
+            http://192.168.1.100:9090  "sum(ALERTS{alertname=\"APIHighRequestLatencyOnGet\"}) by (host, alertname)" -s 2017-04-28T11:50:00+00:00 -e 2017-04-30T12:55:00+00:00 -r 500
