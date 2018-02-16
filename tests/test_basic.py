@@ -60,7 +60,7 @@ class TestConversion(unittest.TestCase):
 class TestBusLogic(unittest.TestCase):
 
     @patch('parides.prom_service.requests.get')
-    def test_data_is_splitted_to_freq(self, mock):
+    def test_query_is_splitted_with_freq(self, mock):
         dfs = data_from_prom(url="http://localhost", query="tralala",
                              start_time=datetime(year=2017, month=7, day=14, hour=4, minute=0),
                              end_time=datetime(year=2017, month=7, day=14, hour=4, minute=5),
@@ -68,7 +68,7 @@ class TestBusLogic(unittest.TestCase):
         self.assertEqual(5, len(dfs))
 
     @patch('parides.prom_service.requests.get')
-    def test_queries_are_not_splitted_for_default(self, mock):
+    def test_query_is_not_splitted_for_default(self, mock):
         dfs = data_from_prom(url="http://localhost", query="tralala")
         self.assertEqual(1, len(dfs))
 
