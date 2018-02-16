@@ -17,9 +17,9 @@ def data_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts",
     time_id_prefix = "{}-{}".format(start_time.timestamp(), end_time.timestamp())
     prefix = hashlib.sha1(time_id_prefix.encode("UTF-8")).hexdigest()[:4]
 
-    X_splitted = data_from_prom(url, metrics_query, start_time, end_time, resolution)
+    X_buckets = data_from_prom(url, metrics_query, start_time, end_time, resolution)
 
-    if len(X_splitted) == 0:
+    if len(X_buckets) == 0:
         raise ValueError("Prometheus did not return any values for query {}".format(metrics_query))
 
     try:
@@ -30,14 +30,20 @@ def data_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts",
         else:
             raise
 
-    for id, X in enumerate(X_splitted):
+    for id, X in enumerate(X_buckets):
         file = directory + "/" + dataset_id + "_{}_X_{}.csv".format(id, prefix)
         X.to_csv(file, date_format="%m/%d/%Y %H:%M:%S")
     return file
 
 
 def data_from_csv(directory, dataset_id):
-    training_data_files = glob.glob(directory + "/" + dataset_id + "_X_*.csv")
+    """
+        Read data from csv and return list panda frames
+    :param directory:
+    :param dataset_id:
+    :return:
+    """
+    training_data_files = glob.glob(directory + "/" + dataset_id + "_*_X_*.csv")
 
     X = panda.DataFrame()
 
@@ -50,15 +56,10 @@ def data_from_csv(directory, dataset_id):
 
 def data_from_prom(url, query, start_time=(dt.now() - timedelta(minutes=10)), end_time=dt.now(), resolution="15s",
                    freq="10min"):
-    "Parse data from Prometheus and return it as a panda frame"
-    start_time = start_time.replace(tzinfo=pytz.UTC)
-    end_time = end_time.replace(tzinfo=pytz.UTC)
-    date_range = panda.date_range(start=start_time, end=end_time, freq=freq, tz=pytz.UTC).to_datetime().tolist()
+    """Parse data from Prometheus and return it as a panda frame"""
+    date_range = prepare_time_slices(end_time, freq, start_time)
+
     results = []
-
-    if len (date_range) < 2 :
-        date_range = [start_time.replace(tzinfo=pytz.UTC), end_time.replace(tzinfo=pytz.UTC)]
-
     for idx, date in enumerate(date_range):
         start_slice = date
 
@@ -70,6 +71,15 @@ def data_from_prom(url, query, start_time=(dt.now() - timedelta(minutes=10)), en
 
 
     return results
+
+
+def prepare_time_slices(end_time, freq, start_time):
+    start_time = start_time.replace(tzinfo=pytz.UTC)
+    end_time = end_time.replace(tzinfo=pytz.UTC)
+    date_range = panda.date_range(start=start_time, end=end_time, freq=freq, tz=pytz.UTC).to_datetime().tolist()
+    if len(date_range) < 2:
+        date_range = [start_time.replace(tzinfo=pytz.UTC), end_time.replace(tzinfo=pytz.UTC)]
+    return date_range
 
 
 def data_from_prom_api_response(prom_api_response):
