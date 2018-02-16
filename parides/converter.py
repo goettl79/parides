@@ -1,27 +1,26 @@
 import errno
 import glob
 import hashlib
-import logging
 import os
-from datetime import timedelta
 from datetime import datetime as dt
+from datetime import timedelta
 
 import pandas as panda
 import pytz
-import requests
+
+from parides.prom_service import get_prom_api_response
 
 
-def data_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts", start_time=(dt.utcnow() - timedelta(hours=1)),
+def data_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts",
+                start_time=(dt.utcnow() - timedelta(hours=1)),
                 end_time=dt.utcnow(), resolution="1m"):
-
     time_id_prefix = "{}-{}".format(start_time.timestamp(), end_time.timestamp())
     prefix = hashlib.sha1(time_id_prefix.encode("UTF-8")).hexdigest()[:4]
 
-    X = data_from_prometheus(url, metrics_query, start_time, end_time, resolution)
+    X_splitted = data_from_prom(url, metrics_query, start_time, end_time, resolution)
 
-    if X.empty:
-        print("Prometheus did not return any values for query {}".format(metrics_query))
-        return
+    if len(X_splitted) == 0:
+        raise ValueError("Prometheus did not return any values for query {}".format(metrics_query))
 
     try:
         os.makedirs(directory)
@@ -31,9 +30,11 @@ def data_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts", star
         else:
             raise
 
-    file = directory + "/" + dataset_id + "_X_{}.csv".format(prefix)
-    X.to_csv(file, date_format="%m/%d/%Y %H:%M:%S")
+    for id, X in enumerate(X_splitted):
+        file = directory + "/" + dataset_id + "_{}_X_{}.csv".format(id, prefix)
+        X.to_csv(file, date_format="%m/%d/%Y %H:%M:%S")
     return file
+
 
 def data_from_csv(directory, dataset_id):
     training_data_files = glob.glob(directory + "/" + dataset_id + "_X_*.csv")
@@ -47,15 +48,28 @@ def data_from_csv(directory, dataset_id):
     return X
 
 
-def data_from_prometheus(url, query, start_time=(dt.now() - timedelta(hours=1)),
-                         end_time=dt.now(), resolution="1m"):
-    start_time_ts = start_time.replace(tzinfo=pytz.UTC).isoformat()
-    end_time_ts = end_time.replace(tzinfo=pytz.UTC).isoformat()
-    # TODO Pipeline Fetch / Decode here
-    json_query_results = __fetch_data(url, query, end_time_ts, start_time_ts, resolution=resolution)
-    # TODO Raise error here if query error / validate response
-    X = data_from_prom_api_response(json_query_results)
-    return X
+def data_from_prom(url, query, start_time=(dt.now() - timedelta(minutes=10)), end_time=dt.now(), resolution="15s",
+                   freq="10min"):
+    "Parse data from Prometheus and return it as a panda frame"
+    start_time = start_time.replace(tzinfo=pytz.UTC)
+    end_time = end_time.replace(tzinfo=pytz.UTC)
+    date_range = panda.date_range(start=start_time, end=end_time, freq=freq, tz=pytz.UTC).to_datetime().tolist()
+    results = []
+
+    if len (date_range) < 2 :
+        date_range = [start_time.replace(tzinfo=pytz.UTC), end_time.replace(tzinfo=pytz.UTC)]
+
+    for idx, date in enumerate(date_range):
+        start_slice = date
+
+        if idx < len(date_range) - 1:
+            end_slice = date_range[idx + 1]
+            json_query_results = get_prom_api_response(url, query, start_time=start_slice.isoformat(),
+                                                       end_time=end_slice.isoformat(), resolution=resolution)
+            results.append(data_from_prom_api_response(json_query_results.json()))
+
+
+    return results
 
 
 def data_from_prom_api_response(prom_api_response):
@@ -100,22 +114,9 @@ def data_from_prom_api_response(prom_api_response):
         __convert_timeseries(col_pos_index, data_frame, metric_name, metric_scrape_id, prom_metric)
 
     if data_frame.size > 0:
-        data_frame.set_index('time',inplace=True)
+        data_frame.set_index('time', inplace=True)
     data_frame.sort_index(inplace=True)
     return data_frame
-
-
-def __fetch_data(url, query, end_time, start_time, resolution="60"):
-    url_new = '{0}/api/v1/query_range'.format(url)
-    prom_response = requests.get(url_new,
-                                 params={'query': query,
-                                         'start': start_time,
-                                         'end': end_time,
-                                         'step': resolution})
-
-    if prom_response.status_code != 200:
-        logging.error("could not receive values " + prom_response.text)
-    return prom_response.json()
 
 
 def __convert_timeseries(column_pos, df, metric_name, metric_scrape_id, prom_metric):

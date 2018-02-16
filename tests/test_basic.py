@@ -1,10 +1,12 @@
-import datetime
 import json
 import unittest
+from _datetime import datetime
+from unittest.mock import patch
 
 import pandas as pd
 
-from parides.converter import data_from_prom_api_response
+from parides.converter import data_from_prom_api_response, data_from_prom
+from tests.constants import API_RESP_RAW_METRIC, API_RESP_DERIVED_METRIC, API_RESP_MULT_METRICS, API_RESPONSE_EMPTY
 
 
 class TestConversion(unittest.TestCase):
@@ -52,141 +54,54 @@ class TestConversion(unittest.TestCase):
         metrics_data = data_from_prom_api_response(prom_api_response=json.loads(API_RESP_RAW_METRIC))
         first_time = metrics_data.index[0]
         pythonDateTime = pd.Timestamp(first_time).to_pydatetime()
-        self.assertEqual(pythonDateTime, datetime.datetime(year=2017, month=7, day=14, hour=4, minute=59))
+        self.assertEqual(pythonDateTime, datetime(year=2017, month=7, day=14, hour=4, minute=59))
 
 
-API_RESP_RAW_METRIC = """
-{
-  "status": "success",
-  "data": {
-    "resultType": "matrix",
-    "result": [
-      {
-        "metric": {
-          "method": "GET",
-          "instance": "10.1.0.1:102",
-          "job": "cadvisor",
-         "__name__": "up"
+class TestBusLogic(unittest.TestCase):
 
-        },
-        "values": [
-          [
-            1500008340,
-            "3"
-          ],
-          [
-            1500008400,
-            "4"
-          ]
-        ]
-      }
-    ]
-  }
-}
-"""
-API_RESP_DERIVED_METRIC = """
-{
-  "status": "success",
-  "data": {
-    "resultType": "matrix",
-    "result": [
-      {
-        "metric": { 
-        },
-        "values": [
-          [
-            1500008340,
-            "1"
-          ],
-          [
-            1500008400,
-            "2"
-          ]
-        ]
-      }
-    ]
-  }
-}
-"""
-API_RESP_MULT_METRICS = """
-{
-  "status": "success",
-  "data": {
-    "resultType": "matrix",
-    "result": [
-      {
-        "metric": {
-          "__name__": "up",
-          "instance": "10.12.0.1:1012",
-          "job": "cadvisor"
-        },
-        "values": [
-          [
-            1499749200,
-            "1"
-          ],
-          [
-            1499749260,
-            "1"
-          ]
-        ]
-      },
-      {
-        "metric": {
-          "__name__": "up",
-          "instance": "10.1.1.7:102",
-          "job": "cadvisor"
-        },
-        "values": [
-          [
-            1499749200,
-            "1"
-          ],
-          [
-            1499749260,
-            "1"
-          ]
-        ]
-      }
-    ]
-  }
-}
-"""
+    @patch('parides.prom_service.requests.get')
+    def test_data_is_splitted_to_freq(self, mock):
+        dfs = data_from_prom(url="http://localhost", query="tralala",
+                             start_time=datetime(year=2017, month=7, day=14, hour=4, minute=0),
+                             end_time=datetime(year=2017, month=7, day=14, hour=4, minute=5),
+                             freq="1min")
+        self.assertEqual(5, len(dfs))
 
-API_RESPONSE_ALERTS = """
-{
-  "status": "success",
-  "data": {
-    "resultType": "matrix",
-    "result": [
-      {
-        "metric": {
-          "__name__": "ALERTS",
-          "alertname": "HighUsage",
-          "alertstate": "firing",
-          "code": "200",
-          "handler": "graph",
-          "instance": "localhost:9090",
-          "job": "prometheus",
-          "method": "get"
-        },
-        "values": [
-          [
-            1502711794.834,
-            "1"
-          ],
-          [
-            1502711809.834,
-            "1"
-          ]
-        ]
-      }
-    ]
-  }
-}
-"""
-API_RESPONSE_EMPTY = """
-  {"status":"success","data":{"resultType":"matrix","result":[]}}
-"""
+    @patch('parides.prom_service.requests.get')
+    def test_queries_are_not_splitted_for_default(self, mock):
+        dfs = data_from_prom(url="http://localhost", query="tralala")
+        self.assertEqual(1, len(dfs))
+
+    @patch('parides.prom_service.requests.get')
+    def test_queries_are_not_splitted_for_open_intervals(self, mock):
+        dfs = data_from_prom(url="http://localhost", query="tralala",
+                             start_time=datetime(year=2017, month=7, day=14, hour=4, minute=0),
+                             end_time=datetime(year=2017, month=7, day=14, hour=4, minute=5),
+                             freq="10min")
+        self.assertEqual(1, len(dfs))
+
+
+class TestApiIntegration(unittest.TestCase):
+
+    @patch('parides.prom_service.requests.get')
+    def test_prometheus_service_api_empty_response(self, mock_get):
+        mock_get.return_value.ok = True
+        # Call the service, which will send a request to the server.
+        response = data_from_prom("http://localhost:9090", "{__name__=\".+\"}")
+
+        # If the request is sent successfully, then I expect a response to be returned.
+        self.assertIsNotNone(response)
+
+    @patch('parides.prom_service.requests.get')
+    def test_prometheus_service_api_error_response(self, mock_get):
+        mock_get.return_value.ok = False
+        # Call the service, which will send a request to the server.
+        try:
+            data_from_prom("http://localhost:9090", "{__name__=\".+\"}")
+            self.fail("This should have caused an exception to be thrown!")
+        except RuntimeError:
+            pass
+
+
 if __name__ == '__main__':
     unittest.main()

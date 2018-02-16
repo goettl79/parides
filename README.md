@@ -7,7 +7,7 @@ folder, containing prometheus data from the last 5 minutes.
     docker run \
         -v /tmp:/usr/src/app/timeseries \
         -i goettl/parides \
-            http://192.168.2.110:9090 {__name__=~\".+\"} 
+            192.168.42.60:9090 {__name__=~\".+\"} 
 
 
 Further examples are currently under construction in the [documentation](https://goettl79.github.io/parides/) section.
