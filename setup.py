@@ -5,10 +5,10 @@ from setuptools import find_packages
 
 setup(
     name='parides',
-    version='0.2',
+    version='0.3',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
     url='https://github.com/goettl79/parides',
-    download_url='https://github.com/goettl79/parides/archive/0.2.tar.gz',
+    download_url='https://github.com/goettl79/parides/archive/0.3.tar.gz',
     license='Apache',
     author='Georg Öttl',
     keywords=['monitoring', 'prometheus'], # arbitrary keywords
