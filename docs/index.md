@@ -5,11 +5,11 @@ Install package with pip.
 
     pip install parides
 
-Method ```data_from_prometheus``` returns a panda dataframe with Prometheus metrics. 
+Method ```data_from_prom``` returns a panda dataframe with Prometheus metrics. 
 
-    from parides.converter import data_from_prometheus
+    from parides.converter import data_from_prom
     
-    df = data_from_prometheus(url="192.168.2.111",query="{__name__=~\".+\"}")
+    df = data_from_prom(url="192.168.2.111",query="{__name__=~\".+\"}")
 
 # CLI
 
