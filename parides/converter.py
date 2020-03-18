@@ -76,7 +76,7 @@ def data_from_prom(url, query, start_time=(dt.now() - timedelta(minutes=10)), en
 def prepare_time_slices(end_time, freq, start_time):
     start_time = start_time.replace(tzinfo=pytz.UTC)
     end_time = end_time.replace(tzinfo=pytz.UTC)
-    date_range = panda.date_range(start=start_time, end=end_time, freq=freq, tz=pytz.UTC).to_datetime().tolist()
+    date_range = panda.to_datetime(panda.date_range(start=start_time, end=end_time, freq=freq, tz=pytz.UTC)).tolist()
     if len(date_range) < 2:
         date_range = [start_time.replace(tzinfo=pytz.UTC), end_time.replace(tzinfo=pytz.UTC)]
     return date_range
