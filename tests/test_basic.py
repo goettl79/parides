@@ -53,8 +53,8 @@ class TestConversion(unittest.TestCase):
     def test_time_is_in_utc(self):
         metrics_data = data_from_prom_api_response(prom_api_response=json.loads(API_RESP_RAW_METRIC))
         first_time = metrics_data.index[0]
-        pythonDateTime = pd.Timestamp(first_time).to_pydatetime()
-        self.assertEqual(pythonDateTime, datetime(year=2017, month=7, day=14, hour=4, minute=59))
+        python_date_time = pd.Timestamp(first_time).to_pydatetime()
+        self.assertEqual(python_date_time, datetime(year=2017, month=7, day=14, hour=4, minute=59))
 
 
 class TestBusLogic(unittest.TestCase):
