@@ -7,7 +7,6 @@ from parides.converter import data_to_csv
 
 
 def main():
-
     parser = argparse.ArgumentParser()
     parser.add_argument("URL",
                         help="Prometheus http API endpoint. "
@@ -19,7 +18,7 @@ def main():
     parser.add_argument("-s", "--start-date", type=lambda d: dateutil.parser.parse(d),
                         default=datetime.datetime.utcnow() - datetime.timedelta(minutes=5))
     parser.add_argument("-e", "--end-date", type=lambda d: dateutil.parser.parse(d),
-                        default=datetime.datetime.utcnow() )
+                        default=datetime.datetime.utcnow())
     args = parser.parse_args()
 
     data_to_csv(url=args.URL, metrics_query=args.query, dataset_id=args.dsid, directory=args.output_directory,

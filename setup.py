@@ -11,7 +11,7 @@ setup(
     download_url='https://github.com/goettl79/parides/archive/0.3.tar.gz',
     license='Apache',
     author='Georg Öttl',
-    keywords=['monitoring', 'prometheus'], # arbitrary keywords
+    keywords=['monitoring', 'prometheus'],  # arbitrary keywords
     author_email='georg.oettl@gmail.com',
     description='Parides is a simple module to convert Prometheus metrics data to a panda dataframe or a '
                 'comma-separated file.',

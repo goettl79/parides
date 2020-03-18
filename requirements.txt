@@ -3,3 +3,4 @@ requests
 numpy
 pandas
 pytz
+pytest

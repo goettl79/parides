@@ -17,9 +17,9 @@ def data_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts",
     time_id_prefix = "{}-{}".format(start_time.timestamp(), end_time.timestamp())
     prefix = hashlib.sha1(time_id_prefix.encode("UTF-8")).hexdigest()[:4]
 
-    X_buckets = data_from_prom(url, metrics_query, start_time, end_time, resolution)
+    x_buckets = data_from_prom(url, metrics_query, start_time, end_time, resolution)
 
-    if len(X_buckets) == 0:
+    if len(x_buckets) == 0:
         raise ValueError("Prometheus did not return any values for query {}".format(metrics_query))
 
     try:
@@ -30,8 +30,8 @@ def data_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts",
         else:
             raise
 
-    for id, X in enumerate(X_buckets):
-        file = directory + "/" + dataset_id + "_{}_X_{}.csv".format(id, prefix)
+    for idB, X in enumerate(x_buckets):
+        file = directory + "/" + dataset_id + "_{}_X_{}.csv".format(idB, prefix)
         X.to_csv(file, date_format="%m/%d/%Y %H:%M:%S")
     return file
 
@@ -45,19 +45,19 @@ def data_from_csv(directory, dataset_id):
     """
     training_data_files = glob.glob(directory + "/" + dataset_id + "_*_X_*.csv")
 
-    X = panda.DataFrame()
+    x = panda.DataFrame()
 
     for training_data_file in training_data_files:
-        Xtmp = panda.DataFrame.from_csv(training_data_file, index_col=0, header=0, infer_datetime_format=True)
-        X = X.append(Xtmp)
+        xtmp = panda.DataFrame.from_csv(training_data_file, index_col=0, header=0, infer_datetime_format=True)
+        x = x.append(xtmp)
 
-    return X
+    return x
 
 
 def data_from_prom(url, query, start_time=(dt.now() - timedelta(minutes=10)), end_time=dt.now(), resolution="15s",
                    freq="10min"):
     """Parse data from Prometheus and return it as a panda frame"""
-    date_range = prepare_time_slices(end_time, freq, start_time)
+    date_range = __prepare_time_slices(end_time, freq, start_time)
 
     results = []
     for idx, date in enumerate(date_range):
@@ -69,11 +69,10 @@ def data_from_prom(url, query, start_time=(dt.now() - timedelta(minutes=10)), en
                                                        end_time=end_slice.isoformat(), resolution=resolution)
             results.append(data_from_prom_api_response(json_query_results.json()))
 
-
     return results
 
 
-def prepare_time_slices(end_time, freq, start_time):
+def __prepare_time_slices(end_time, freq, start_time):
     start_time = start_time.replace(tzinfo=pytz.UTC)
     end_time = end_time.replace(tzinfo=pytz.UTC)
     date_range = panda.to_datetime(panda.date_range(start=start_time, end=end_time, freq=freq, tz=pytz.UTC)).tolist()
@@ -109,7 +108,7 @@ def data_from_prom_api_response(prom_api_response):
 
         metric_name = metric_name[:-1]
 
-        if metric_name is "":
+        if metric_name == "":
             anonymous_metric_counter += 1
             metric_name = "value_{}".format(anonymous_metric_counter)
 
