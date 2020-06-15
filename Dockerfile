@@ -7,4 +7,3 @@ COPY . .
 RUN python setup.py build
 RUN python setup.py install
 ENTRYPOINT [ "parides" ]
-USER parides

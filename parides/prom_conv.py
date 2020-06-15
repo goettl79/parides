@@ -20,8 +20,6 @@ def from_prom_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts",
     time_id_prefix = "{}-{}".format(start_time.timestamp(), end_time.timestamp())
     prefix = hashlib.sha1(time_id_prefix.encode("UTF-8")).hexdigest()[:4]
 
-    x_buckets = from_prom_to_df(url, metrics_query, start_time, end_time, resolution)
-
     try:
         os.makedirs(directory)
     except OSError as exc:
@@ -29,6 +27,8 @@ def from_prom_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts",
             pass
         else:
             raise
+
+    x_buckets = from_prom_to_df(url, metrics_query, start_time, end_time, resolution)
 
     for idB, X in enumerate(x_buckets):
         file = directory + "/" + dataset_id + "_{}_X_{}.csv".format(idB, prefix)
