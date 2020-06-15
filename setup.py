@@ -19,5 +19,7 @@ setup(
         'Development Status :: 3 - Alpha',
         'Programming Language :: Python :: 3',
     ],
-    scripts=['bin/parides.py'],
+    entry_points = {
+        'console_scripts': ['parides = parides.cli:main'],
+    }
 )
