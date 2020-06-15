@@ -4,7 +4,7 @@ import datetime
 
 import dateutil.parser
 
-from parides.converter import data_to_csv
+from parides.prom_conv import from_prom_to_csv
 
 
 def main():
@@ -17,13 +17,13 @@ def main():
     parser.add_argument("-r", "--resolution", default="15s")
     parser.add_argument("--dsid", default="prom", help="Id used to identify dataset.")
     parser.add_argument("-s", "--start-date", type=lambda d: dateutil.parser.parse(d),
-                        default=datetime.datetime.utcnow() - datetime.timedelta(minutes=5))
+                        default=datetime.datetime.utcnow() - datetime.timedelta(minutes=2))
     parser.add_argument("-e", "--end-date", type=lambda d: dateutil.parser.parse(d),
                         default=datetime.datetime.utcnow())
     args = parser.parse_args()
 
-    data_to_csv(url=args.URL, metrics_query=args.query, dataset_id=args.dsid, directory=args.output_directory,
-                start_time=args.start_date, end_time=args.end_date, resolution=args.resolution)
+    from_prom_to_csv(url=args.URL, metrics_query=args.query, dataset_id=args.dsid, directory=args.output_directory,
+                     start_time=args.start_date, end_time=args.end_date, resolution=args.resolution)
 
 
 if __name__ == "__main__":
