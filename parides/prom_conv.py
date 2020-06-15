@@ -1,5 +1,4 @@
 import errno
-import glob
 import hashlib
 import logging
 import os
@@ -23,9 +22,6 @@ def from_prom_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts",
 
     x_buckets = from_prom_to_df(url, metrics_query, start_time, end_time, resolution)
 
-    if len(x_buckets) == 0:
-        raise ValueError("Prometheus did not return any values for query {}".format(metrics_query))
-
     try:
         os.makedirs(directory)
     except OSError as exc:
@@ -40,7 +36,6 @@ def from_prom_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts",
     return file
 
 
-
 def from_prom_to_df(url, query, start_time=(dt.now() - timedelta(minutes=10)), end_time=dt.now(), resolution="15s",
                     freq="10min"):
     """Parse data from Prometheus and return it as a panda frame"""
@@ -52,9 +47,12 @@ def from_prom_to_df(url, query, start_time=(dt.now() - timedelta(minutes=10)), e
 
         if idx < len(date_range) - 1:
             end_slice = date_range[idx + 1]
-            json_query_results = get_prom_api_response(url, query, start_time=start_slice.isoformat(),
-                                                       end_time=end_slice.isoformat(), resolution=resolution)
+            json_query_results = __get_prom_api_response(url, query, start_time=start_slice.isoformat(),
+                                                         end_time=end_slice.isoformat(), resolution=resolution)
             results.append(from_prom_json_to_df(json_query_results.json()))
+
+    if len(results) == 0:
+        raise ValueError("Prometheus did not return any values for query {}".format(query))
     return results
 
 
@@ -123,11 +121,12 @@ def __prepare_time_slices(end_time, freq, start_time):
         date_range = [start_time.replace(tzinfo=pytz.UTC), end_time.replace(tzinfo=pytz.UTC)]
     return date_range
 
-def get_prom_api_response(url,
-                          query,
-                          end_time=datetime.utcnow(),
-                          start_time=(datetime.utcnow() - timedelta(minutes=1)),
-                          resolution="60"):
+
+def __get_prom_api_response(url,
+                            query,
+                            end_time=datetime.utcnow(),
+                            start_time=(datetime.utcnow() - timedelta(minutes=1)),
+                            resolution="60"):
     url_new = '{0}/api/v1/query_range'.format(url)
     response = requests.get(url_new,
                             params={'query': query,
