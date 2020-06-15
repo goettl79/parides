@@ -6,8 +6,9 @@ from datetime import timedelta
 from unittest.mock import patch
 
 import pandas as pd
+from parides import cli
 
-from parides.prom_conv import from_prom_to_df, from_prom_json_to_df, prepare_time_slices
+from parides.prom_conv import from_prom_to_df, from_prom_json_to_df
 from tests.constants import API_RESP_RAW_METRIC, API_RESP_DERIVED_METRIC, API_RESP_MULT_METRICS, API_RESPONSE_EMPTY
 
 
@@ -58,8 +59,6 @@ class TestConversion(unittest.TestCase):
         python_date_time = pd.Timestamp(first_time).to_pydatetime()
         self.assertEqual(python_date_time, datetime(year=2017, month=7, day=14, hour=4, minute=59))
 
-    def test_prepare_time_slices(self):
-        prepare_time_slices(datetime.now(), "10m", (datetime.now() - timedelta(minutes=10)))
 
 
 class TestBusLogic(unittest.TestCase):
