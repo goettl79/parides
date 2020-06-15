@@ -1,23 +1,27 @@
 import errno
 import glob
 import hashlib
+import logging
 import os
-from datetime import datetime as dt
+from datetime import datetime as dt, datetime
 from datetime import timedelta
 
 import pandas as panda
 import pytz
+import requests
 
-from parides.prom_service import get_prom_api_response
 
+def from_prom_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts",
+                     start_time=(dt.utcnow() - timedelta(hours=1)),
+                     end_time=dt.utcnow(), resolution="1m"):
+    """
+    Read data from prometheus and return as a csv file
+    """
 
-def data_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts",
-                start_time=(dt.utcnow() - timedelta(hours=1)),
-                end_time=dt.utcnow(), resolution="1m"):
     time_id_prefix = "{}-{}".format(start_time.timestamp(), end_time.timestamp())
     prefix = hashlib.sha1(time_id_prefix.encode("UTF-8")).hexdigest()[:4]
 
-    x_buckets = data_from_prom(url, metrics_query, start_time, end_time, resolution)
+    x_buckets = from_prom_to_df(url, metrics_query, start_time, end_time, resolution)
 
     if len(x_buckets) == 0:
         raise ValueError("Prometheus did not return any values for query {}".format(metrics_query))
@@ -36,26 +40,9 @@ def data_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts",
     return file
 
 
-def data_from_csv(directory, dataset_id):
-    """
-        Read data from csv and return list panda frames
-    :param directory:
-    :param dataset_id:
-    :return:
-    """
-    training_data_files = glob.glob(directory + "/" + dataset_id + "_*_X_*.csv")
 
-    x = panda.DataFrame()
-
-    for training_data_file in training_data_files:
-        xtmp = panda.DataFrame.from_csv(training_data_file, index_col=0, header=0, infer_datetime_format=True)
-        x = x.append(xtmp)
-
-    return x
-
-
-def data_from_prom(url, query, start_time=(dt.now() - timedelta(minutes=10)), end_time=dt.now(), resolution="15s",
-                   freq="10min"):
+def from_prom_to_df(url, query, start_time=(dt.now() - timedelta(minutes=10)), end_time=dt.now(), resolution="15s",
+                    freq="10min"):
     """Parse data from Prometheus and return it as a panda frame"""
     date_range = __prepare_time_slices(end_time, freq, start_time)
 
@@ -67,21 +54,11 @@ def data_from_prom(url, query, start_time=(dt.now() - timedelta(minutes=10)), en
             end_slice = date_range[idx + 1]
             json_query_results = get_prom_api_response(url, query, start_time=start_slice.isoformat(),
                                                        end_time=end_slice.isoformat(), resolution=resolution)
-            results.append(data_from_prom_api_response(json_query_results.json()))
-
+            results.append(from_prom_json_to_df(json_query_results.json()))
     return results
 
 
-def __prepare_time_slices(end_time, freq, start_time):
-    start_time = start_time.replace(tzinfo=pytz.UTC)
-    end_time = end_time.replace(tzinfo=pytz.UTC)
-    date_range = panda.to_datetime(panda.date_range(start=start_time, end=end_time, freq=freq, tz=pytz.UTC)).tolist()
-    if len(date_range) < 2:
-        date_range = [start_time.replace(tzinfo=pytz.UTC), end_time.replace(tzinfo=pytz.UTC)]
-    return date_range
-
-
-def data_from_prom_api_response(prom_api_response):
+def from_prom_json_to_df(prom_api_response):
     data_frame = panda.DataFrame()
 
     if "data" not in prom_api_response:
@@ -136,3 +113,30 @@ def __convert_timeseries(column_pos, df, metric_name, metric_scrape_id, prom_met
         df.at[column_pos[metric_name], 'time'] = timestamp
         df.at[column_pos[metric_name], metric_name] = value
         column_pos[metric_name] += 1
+
+
+def __prepare_time_slices(end_time, freq, start_time):
+    start_time = start_time.replace(tzinfo=pytz.UTC)
+    end_time = end_time.replace(tzinfo=pytz.UTC)
+    date_range = panda.to_datetime(panda.date_range(start=start_time, end=end_time, freq=freq, tz=pytz.UTC)).tolist()
+    if len(date_range) < 2:
+        date_range = [start_time.replace(tzinfo=pytz.UTC), end_time.replace(tzinfo=pytz.UTC)]
+    return date_range
+
+def get_prom_api_response(url,
+                          query,
+                          end_time=datetime.utcnow(),
+                          start_time=(datetime.utcnow() - timedelta(minutes=1)),
+                          resolution="60"):
+    url_new = '{0}/api/v1/query_range'.format(url)
+    response = requests.get(url_new,
+                            params={'query': query,
+                                    'start': start_time,
+                                    'end': end_time,
+                                    'step': resolution})
+    if response.ok:
+        return response
+    else:
+        msg = "Status: {0} Text: {1}".format(response.status_code, response.text)
+        logging.error(msg)
+        raise RuntimeError(msg)
