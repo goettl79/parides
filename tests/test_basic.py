@@ -1,12 +1,10 @@
 import json
 import unittest
 from datetime import datetime as datetime
-from datetime import timedelta
 
 from unittest.mock import patch
 
 import pandas as pd
-from parides import cli
 
 from parides.prom_conv import from_prom_to_df, from_prom_json_to_df
 from tests.constants import API_RESP_RAW_METRIC, API_RESP_DERIVED_METRIC, API_RESP_MULT_METRICS, API_RESPONSE_EMPTY
@@ -60,8 +58,7 @@ class TestConversion(unittest.TestCase):
         self.assertEqual(python_date_time, datetime(year=2017, month=7, day=14, hour=4, minute=59))
 
 
-
-class TestBusLogic(unittest.TestCase):
+class TestIterateOverBigResults(unittest.TestCase):
 
     @patch('parides.prom_conv.requests.get')
     def test_query_is_splitted_with_freq(self, mock):
@@ -85,10 +82,10 @@ class TestBusLogic(unittest.TestCase):
         self.assertEqual(1, len(dfs))
 
 
-class TestApiIntegration(unittest.TestCase):
+class TestPromApiV1Integration(unittest.TestCase):
 
     @patch('parides.prom_conv.requests.get')
-    def test_prometheus_service_api_empty_response(self, mock_get):
+    def test_convert_empty_response(self, mock_get):
         mock_get.return_value.ok = True
         # Call the service, which will send a request to the server.
         response = from_prom_to_df("http://localhost:9090", "{__name__=\".+\"}")
@@ -97,7 +94,7 @@ class TestApiIntegration(unittest.TestCase):
         self.assertIsNotNone(response)
 
     @patch('parides.prom_conv.requests.get')
-    def test_prometheus_service_api_error_response(self, mock_get):
+    def test_convert_error_response(self, mock_get):
         mock_get.return_value.ok = False
         # Call the service, which will send a request to the server.
         try:
