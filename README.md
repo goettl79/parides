@@ -1,5 +1,4 @@
-# Parides [![Build Status](https://github.com/goettl79/parides/workflows/Python-Package/badge.svg)](https://github.com/goettl79/parides/workflows/Python-Package/badge.svg)
-
+# Parides ![python-package](https://github.com/goettl79/parides/workflows/python-package/badge.svg?branch=master)
 
 Parides is a simple python module/script to convert Prometheus metrics data to a matrix in the form of a pandas data frame
  or a comma-separated file. 
