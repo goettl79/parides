@@ -11,7 +11,7 @@ import requests
 
 
 def from_prom_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts",
-                     start_time=(dt.utcnow() - timedelta(hours=1)),
+                     start_time=(dt.utcnow() - timedelta(minutes=10)),
                      end_time=dt.utcnow(), resolution="1m"):
     """
     Read data from prometheus and return as a csv file
@@ -29,17 +29,19 @@ def from_prom_to_csv(url, metrics_query, dataset_id="id", directory="./prom-ts",
             raise
 
     x_buckets = from_prom_to_df(url, metrics_query, start_time, end_time, resolution)
-
-    for idB, X in enumerate(x_buckets):
-        file = directory + "/" + dataset_id + "_{}_X_{}.csv".format(idB, prefix)
-        X.to_csv(file, date_format="%m/%d/%Y %H:%M:%S")
+    file = directory + "/" + dataset_id + "_X_{}.csv".format(prefix)
+    x_buckets.to_csv(file, date_format="%m/%d/%Y %H:%M:%S")
+    print("Wrote to " + file  )
     return file
 
 
-def from_prom_to_df(url, query, start_time=(dt.now() - timedelta(minutes=10)), end_time=dt.now(), resolution="15s",
+def from_prom_to_df(url, metrics_query,
+                    start_time=(dt.utcnow() - timedelta(minutes=10)),
+                    end_time=dt.utcnow(),
+                    resolution="1m",
                     freq="10min"):
     """Parse data from Prometheus and return it as a panda frame"""
-    date_range = __prepare_time_slices(end_time, freq, start_time)
+    date_range = prepare_time_slices(end_time=end_time, freq=freq, start_time=start_time)
 
     results = []
     for idx, date in enumerate(date_range):
@@ -47,13 +49,14 @@ def from_prom_to_df(url, query, start_time=(dt.now() - timedelta(minutes=10)), e
 
         if idx < len(date_range) - 1:
             end_slice = date_range[idx + 1]
-            json_query_results = __get_prom_api_response(url, query, start_time=start_slice.isoformat(),
+            json_query_results = __get_prom_api_response(url, metrics_query, start_time=start_slice.isoformat(),
                                                          end_time=end_slice.isoformat(), resolution=resolution)
             results.append(from_prom_json_to_df(json_query_results.json()))
 
     if len(results) == 0:
-        raise ValueError("Prometheus did not return any values for query {}".format(query))
-    return results
+        raise ValueError("Prometheus did not return any values for query {}".format(metrics_query))
+    return panda.concat(results, axis=0, join='outer', ignore_index=False, keys=None,
+                     levels=None, names=None, verify_integrity=False, copy=True)
 
 
 def from_prom_json_to_df(prom_api_response):
@@ -62,12 +65,12 @@ def from_prom_json_to_df(prom_api_response):
     if "data" not in prom_api_response:
         return data_frame
 
-    ts_raw_data = prom_api_response['data']['result']
+    prom_metrics = prom_api_response['data']['result']
 
     col_pos_index = {}
     anonymous_metric_counter = 0
 
-    for prom_metric in ts_raw_data:
+    for prom_metric in prom_metrics:
         id_keys = {"instance", "job", "name"}
         metric_meta = prom_metric['metric']
         labels = set(metric_meta.keys()) - id_keys
@@ -105,7 +108,7 @@ def from_prom_json_to_df(prom_api_response):
 
 def __convert_timeseries(column_pos, df, metric_name, metric_scrape_id, prom_metric):
     for value in prom_metric['values']:
-        timestamp = dt.utcfromtimestamp(int(value[0]))
+        timestamp = panda.to_datetime(int(value[0]), unit='s')
         value = float(value[1])
         df.at[column_pos[metric_name], 'id'] = metric_scrape_id
         df.at[column_pos[metric_name], 'time'] = timestamp
@@ -113,7 +116,7 @@ def __convert_timeseries(column_pos, df, metric_name, metric_scrape_id, prom_met
         column_pos[metric_name] += 1
 
 
-def __prepare_time_slices(end_time, freq, start_time):
+def prepare_time_slices(start_time, end_time, freq):
     start_time = start_time.replace(tzinfo=pytz.UTC)
     end_time = end_time.replace(tzinfo=pytz.UTC)
     date_range = panda.to_datetime(panda.date_range(start=start_time, end=end_time, freq=freq, tz=pytz.UTC)).tolist()
