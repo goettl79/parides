@@ -2,11 +2,12 @@ import json
 import unittest
 from datetime import datetime as datetime
 
-from unittest.mock import patch
+from unittest.mock import patch, Mock
 
 import pandas as pd
 
-from parides.prom_conv import from_prom_to_df, from_prom_json_to_df
+from parides import prom_conv
+from parides.prom_conv import from_prom_to_df, from_prom_json_to_df, from_prom_to_csv
 from tests.constants import API_RESP_RAW_METRIC, API_RESP_DERIVED_METRIC, API_RESP_MULT_METRICS, API_RESPONSE_EMPTY
 
 
@@ -60,29 +61,36 @@ class TestConversion(unittest.TestCase):
 
 class TestIterateOverBigResults(unittest.TestCase):
 
-    @patch('parides.prom_conv.requests.get')
-    def test_query_is_splitted_with_freq(self, mock):
-        dfs = from_prom_to_df(url="http://localhost", query="tralala",
-                              start_time=datetime(year=2017, month=7, day=14, hour=4, minute=0),
-                              end_time=datetime(year=2017, month=7, day=14, hour=4, minute=5),
-                              freq="1min")
-        self.assertEqual(5, len(dfs))
+    def test_window_is_splitted_with_freq(self):
+        dfs = prom_conv.prepare_time_slices(start_time=datetime(year=2017, month=7, day=14, hour=4, minute=0),
+                                            end_time=datetime(year=2017, month=7, day=14, hour=4, minute=5),
+                                            freq="1min")
+        self.assertEqual(6, len(dfs))
 
-    @patch('parides.prom_conv.requests.get')
-    def test_query_is_not_splitted_for_default(self, mock):
-        dfs = from_prom_to_df(url="http://localhost", query="tralala")
-        self.assertEqual(1, len(dfs))
-
-    @patch('parides.prom_conv.requests.get')
-    def test_queries_are_not_splitted_for_open_intervals(self, mock):
-        dfs = from_prom_to_df(url="http://localhost", query="tralala",
-                              start_time=datetime(year=2017, month=7, day=14, hour=4, minute=0),
-                              end_time=datetime(year=2017, month=7, day=14, hour=4, minute=5),
-                              freq="10min")
-        self.assertEqual(1, len(dfs))
+    def test_window_is_not_splitted_for_intervals_overrun(self):
+        dfs = prom_conv.prepare_time_slices(
+            start_time=datetime(year=2017, month=7, day=14, hour=4, minute=0),
+            end_time=datetime(year=2017, month=7, day=14, hour=4, minute=5),
+            freq="10min")
+        self.assertEqual(2, len(dfs))
 
 
 class TestPromApiV1Integration(unittest.TestCase):
+
+    @patch('parides.prom_conv.requests.get')
+    def test_save_data_to_csv(self, mock_get):
+        mock_get.return_value = Mock(ok=True)
+        mock_get.return_value.json.return_value = json.loads(API_RESP_RAW_METRIC)
+        directory = 'container_metrics'
+        dataset_id = "incident_1"
+
+        f = from_prom_to_csv(url="",
+                             metrics_query="up",
+                             dataset_id=dataset_id,
+                             directory=directory)
+
+        with open(f, 'r') as X_data:
+            self.assertTrue('time,id,up' in X_data.read())
 
     @patch('parides.prom_conv.requests.get')
     def test_convert_empty_response(self, mock_get):
