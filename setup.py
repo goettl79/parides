@@ -5,10 +5,8 @@ from setuptools import find_packages
 
 setup(
     name='parides',
-    version='0.4',
     packages=find_packages(exclude=['contrib', 'docs', 'tests*']),
     url='https://github.com/goettl79/parides',
-    download_url='https://github.com/goettl79/parides/archive/0.4.tar.gz',
     license='Apache',
     author='Georg Öttl',
     keywords=['monitoring', 'prometheus'],  # arbitrary keywords
@@ -19,7 +17,9 @@ setup(
         'Development Status :: 3 - Alpha',
         'Programming Language :: Python :: 3',
     ],
-    entry_points = {
+    entry_points={
         'console_scripts': ['parides = parides.cli:main'],
-    }
+    },
+    use_scm_version=True,
+    setup_requires=['setuptools_scm'],
 )
