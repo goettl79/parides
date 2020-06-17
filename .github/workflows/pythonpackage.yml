@@ -55,7 +55,7 @@ jobs:
       - name: Install dependencies
         run: |
           python -m pip install -U pip
-          python -m pip install -U setuptools wheel
+          python -m pip install -U setuptools wheel setuptools_scm
 
       - name: Package sdist
         run: |
