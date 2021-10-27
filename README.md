@@ -24,7 +24,7 @@ folder $(pwd)/timeseries.
     parides http://192.168.1.114:9090 {__name__=~\".+\"}>0
     
 **A Simple Plot:** Extended example using a dataframe and matplotlib to
-visualize some timeseries. 
+visualize a timeseries. 
      
     from matplotlib import pyplot
     from parides.prom_conv import from_prom_to_df
