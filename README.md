@@ -2,29 +2,29 @@
 
 Parides is a simple python module/script to convert Prometheus metrics data 
 to a pandas data frame, or a comma-separated file. 
-For a quickstart at the console, use on of the commands below. 
 
 
-## Docker
-In this example parides gets executed inside a container
-and fetches all data from the last 5 minutes.
-The output CSV file gets written in your local 
-folder $(pwd)/timeseries.
+## Docker (Quickstart)
+Parides fetches all data from the Prometheus url provided using its defaults.
+The metrics are converted to a CSV file which is stored to the docker-mounted local 
+folder ```$(pwd)/timeseries```. 
 
     docker run \
         -v $(pwd)/timeseries:/usr/src/app/timeseries \
         -i goettl/parides \
             http://192.168.1.114:9090 "{__name__=~\".+\"}>0"
             
-## Python
+## Python (Quickstart)
 
-**Command Line:** Same example as above, however using a python cli
+Same example as above, however using a python cli
  
     pip install parides
     parides http://192.168.1.114:9090 {__name__=~\".+\"}>0
     
-**A Simple Plot:** Extended example using a dataframe and matplotlib to
-visualize a timeseries. 
+## Example
+
+**A Simple Plot:** Extended example from above using a dataframe and matplotlib to
+visualize a simple timeseries (cpu metrics).
      
     from matplotlib import pyplot
     from parides.prom_conv import from_prom_to_df
