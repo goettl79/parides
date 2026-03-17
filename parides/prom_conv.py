@@ -1,4 +1,3 @@
-import errno
 import hashlib
 import logging
 import os
@@ -289,11 +288,6 @@ def from_prom_json_to_df(prom_api_response: Dict[str, Any]) -> pd.DataFrame:
     df.set_index('time', inplace=True)
     df.sort_index(inplace=True)
     return df
-
-def __convert_timeseries(column_pos: Dict[str, int], df: pd.DataFrame, metric_name: str, 
-                         metric_scrape_id: str, prom_metric: Dict[str, Any]):
-    # This function is now deprecated
-    pass
 
 
 def prepare_time_slices(start_time: datetime, end_time: datetime, freq: str) -> List[datetime]:
