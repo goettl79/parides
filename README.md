@@ -30,7 +30,11 @@ pip install parides
 
 ### Via Docker (Recommended for CI/CD / Pipelines)
 ```bash
+# From Docker Hub
 docker pull goettl/parides
+
+# From GitHub Container Registry
+docker pull ghcr.io/goettl79/parides
 ```
 
 ## 🛠️ Usage
@@ -79,7 +83,7 @@ If you don't use Python directly (e.g., you're an **R user**, **Data Scientist**
 ```bash
 # Extract metrics to a local 'data' folder
 docker run -v $(pwd)/data:/app/timeseries \
-    goettl/parides http://prometheus-host:9090 "up" --format parquet
+    ghcr.io/goettl79/parides http://prometheus-host:9090 "up" --format parquet
 ```
 
 ### 4. Python API (Jupyter Notebook / Scripts)

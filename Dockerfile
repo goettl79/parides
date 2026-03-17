@@ -1,5 +1,5 @@
 # Use a very slim base image
-FROM python:3.12-slim as builder
+FROM python:3.12-slim AS builder
 
 # Set environment variables for Poetry
 ENV POETRY_NO_INTERACTION=1 \
@@ -12,16 +12,22 @@ ENV POETRY_NO_INTERACTION=1 \
 RUN pip install poetry==1.7.1
 
 WORKDIR /app
-COPY pyproject.toml poetry.lock ./
-# Install only production dependencies
-RUN poetry install --no-root --only main
+
+# Copy dependency files
+COPY pyproject.toml poetry.lock README.md ./
+COPY parides ./parides
+
+# Install production dependencies and the project itself
+RUN poetry install --only main
 
 # Final Stage
 FROM python:3.12-slim
 
 WORKDIR /app
+
 # Copy the virtual environment from the builder
 COPY --from=builder /app/.venv /app/.venv
+# Copy the source code as it might be needed by the venv (editable install)
 COPY parides /app/parides
 
 # Add the venv bin to PATH so 'parides' is available
