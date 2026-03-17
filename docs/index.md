@@ -1,61 +1,89 @@
-# PYTHON
-First install inside a virtual environment:
+# 🦋 Parides
 
-    python -m venv venv
-    source venv/bin/activate  # On Windows: venv\Scripts\activate
-    pip install parides
+**Bridging the gap between Prometheus and Data Science.**
 
-### Basic Usage
-Now make a simple matplot using data from a prom instance:
+Parides is designed for engineers and data scientists who need to extract large-scale metrics from Prometheus without hitting API limits or dealing with manual data munging. It automatically handles pagination, pivoting, and alignment, delivering clean **Pandas DataFrames** or **Parquet/CSV** files.
 
+---
+
+## 🚀 Installation
+
+Always install within a virtual environment to manage dependencies:
+
+```bash
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install parides
+```
+
+---
+
+## 📊 Data Science API (Python)
+
+The core of Parides is the `from_prom_to_df` function, which converts PromQL results into a **wide-format DataFrame** (time as index, metrics as columns).
+
+### Quick Start: Visualize Metrics
 ```python
-from matplotlib import pyplot
+import matplotlib.pyplot as plt
 from parides.prom_conv import from_prom_to_df
 
-# Fetch data (automatically handles pagination in 6h chunks by default)
+# Fetch CPU usage for the last 1 hour
 df = from_prom_to_df(
     url="http://localhost:9090",
-    metrics_query="prometheus_engine_query_duration_seconds{quantile=\"0.99\"}",
-    resolution="15s"
+    metrics_query='irate(node_cpu_seconds_total{mode="idle"}[5m])',
+    resolution="1m"
 )
 
-df.plot()
-pyplot.show()
+# Parides returns a clean, aligned Pandas DataFrame
+print(df.head())
+df.plot(title="CPU Idle Time")
+plt.show()
 ```
-    
-![python-package](Figure_1.png)
 
-# CLI
+### Why use the API?
+- **Automatic Alignment:** Multiple time-series with different labels are perfectly aligned by timestamp.
+- **Timezone Safety:** All timestamps are strictly converted to UTC.
+- **Memory Efficient:** Large ranges are automatically queried in chunks (default: 6h) to prevent Prometheus "too many samples" errors.
 
-Parides provides a powerful CLI for exporting Prometheus data to **CSV** or **Parquet**. It is optimized for **Big Data** using streaming writes to minimize memory usage.
+---
 
-### CLI Examples
+## 🛠️ High-Performance CLI
 
-**Example 1: Basic Export** (Last 10 minutes to CSV)
+For large-scale data extraction (ETL pipelines, model training sets), use the CLI. It utilizes **streaming writes** to handle multi-gigabyte exports with minimal RAM usage.
 
-    parides http://localhost:9090 'up'
+### Standard Export
+Export the last 10 minutes of a query to CSV:
+```bash
+parides http://localhost:9090 'up'
+```
 
-**Example 2: Subset with PromQL**
+### Big Data & Streaming (Parquet)
+Export months of data using **1-day chunks**. Parides will stream the results directly to a Parquet file, keeping your memory footprint low:
+```bash
+parides http://localhost:9090 'node_memory_MemFree_bytes' \
+    --start-date "2024-01-01T00:00:00Z" \
+    --end-date "2024-04-01T00:00:00Z" \
+    --resolution "5m" \
+    --chunk-size "1d" \
+    --format parquet \
+    --output-directory "./ml_dataset"
+```
 
-    parides http://localhost:9090 'http_requests_total{status="200"}'
+### Advanced Parameters
+| Flag | Description | Default |
+|------|-------------|---------|
+| `-r, --resolution` | Step resolution (e.g., `15s`, `1m`, `1h`). | `15s` |
+| `--chunk-size` | Time range per API request (e.g., `6h`, `1d`). | `6h` |
+| `-f, --format` | Output format (`csv` or `parquet`). | `csv` |
+| `--dsid` | Custom dataset ID used in filename. | `prom` |
 
-**Example 3: Historical Data with custom resolution**
-  
-    parides http://localhost:9090 'node_cpu_seconds_total' \
-        --start-date "2024-03-01T00:00:00Z" \
-        --end-date "2024-03-02T00:00:00Z" \
-        --resolution "1m"
+---
 
-**Example 4: Parquet Export (Recommended for DS)**
+## 🐳 Running with Docker
 
-    parides http://localhost:9090 'up' --format parquet
+Perfect for CI/CD pipelines or environments without a Python runtime:
 
-**Example 5: Big Data Export (Streaming)**
-For very large time ranges, use `--chunk-size` to control pagination. Parides will stream data directly to disk.
-
-    parides http://localhost:9090 'node_memory_MemFree_bytes' \
-        --start-date "2024-01-01T00:00:00Z" \
-        --end-date "2024-04-01T00:00:00Z" \
-        --resolution "5m" \
-        --chunk-size "1d" \
-        --format parquet
+```bash
+docker run -v $(pwd)/data:/app/timeseries \
+    ghcr.io/goettl79/parides http://prometheus:9090 "up" --format parquet
+```
