@@ -1,6 +1,8 @@
 # PYTHON
-First install
-    
+First install inside a virtual environment:
+
+    python -m venv venv
+    source venv/bin/activate  # On Windows: venv\Scripts\activate
     pip install parides
 
 Now make a simple matplot using data from a prom instance http://...

@@ -25,6 +25,11 @@ Prometheus is great for monitoring, but its JSON API isn't designed for data sci
 
 ### Via Pip (Recommended for DS workflows)
 ```bash
+# Create and activate a virtual environment
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+
+# Install Parides
 pip install parides
 ```
 
@@ -67,11 +72,12 @@ parides http://localhost:9090 'up'
 # Export to Parquet format (highly recommended for large datasets)
 parides http://localhost:9090 'node_cpu_seconds_total' --format parquet
 
-# Advanced usage: Extract 1 hour of data at 1-minute resolution
+# Advanced usage: Extract 1 month of data using 1-day chunks
 parides http://localhost:9090 'node_cpu_seconds_total' \
     --start-date "2024-03-01T00:00:00Z" \
-    --end-date "2024-03-01T01:00:00Z" \
-    --resolution "1m" \
+    --end-date "2024-04-01T00:00:00Z" \
+    --resolution "5m" \
+    --chunk-size "1d" \
     --format parquet \
     --output-directory "./training_data"
 ```
@@ -114,11 +120,23 @@ plt.show()
 We welcome contributions! Whether it's reporting a bug, proposing a feature, or submitting a Pull Request, your input helps make Parides better. Please see our [Contributing Guidelines](CONTRIBUTING.md) to get started.
 
 To set up for local development:
+
+**Option 1: Using Poetry (Recommended)**
 ```bash
 git clone https://github.com/goettl79/parides.git
 cd parides
 poetry install
 poetry run pytest
+```
+
+**Option 2: Using Virtual Environment (venv)**
+```bash
+git clone https://github.com/goettl79/parides.git
+cd parides
+python -m venv venv
+source venv/bin/activate  # On Windows: venv\Scripts\activate
+pip install -e ".[dev]"
+pytest
 ```
 
 ## 📄 License

@@ -53,6 +53,7 @@ def main():
     parser.add_argument("-f", "--format", choices=["csv", "parquet"], default="csv",
                         help="Output file format.")
     parser.add_argument("--dsid", default="prom", help="Dataset ID used in filename.")
+    parser.add_argument("--chunk-size", default="6h", help="Time range per chunk for pagination (e.g., 1h, 6h, 1d).")
     
     parser.add_argument("-s", "--start-date", type=lambda d: dateutil.parser.parse(d),
                         help="Start date (ISO 8601). Defaults to 10m ago.")
@@ -85,11 +86,13 @@ def main():
         if args.format == "csv":
             from_prom_to_csv(url=args.URL, metrics_query=args.query, dataset_id=args.dsid, 
                              directory=args.output_directory, start_time=start_date, 
-                             end_time=end_date, resolution=args.resolution)
+                             end_time=end_date, resolution=args.resolution,
+                             chunk_size=args.chunk_size)
         else:
             from_prom_to_parquet(url=args.URL, metrics_query=args.query, dataset_id=args.dsid, 
                                  directory=args.output_directory, start_time=start_date, 
-                                 end_time=args.end_date, resolution=args.resolution)
+                                 end_time=end_date, resolution=args.resolution,
+                                 chunk_size=args.chunk_size)
     except requests.exceptions.ConnectionError:
         print(f"❌ Error: Could not connect to Prometheus at {args.URL}. Is it running?")
         sys.exit(1)
