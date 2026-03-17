@@ -38,7 +38,7 @@ jobs:
           poetry run flake8 . --count --exit-zero --max-complexity=10 --max-line-length=127 --statistics
       - name: Test
         run: |
-          poetry run pytest
+          PYTHONPATH=. poetry run pytest
 
   publish:
     needs: test
