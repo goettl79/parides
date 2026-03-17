@@ -1,6 +1,55 @@
+[tool.poetry]
+name = "parides"
+version = "0.2.0"
+description = "Efficiently convert Prometheus metrics to Pandas DataFrames and Parquet/CSV files for Data Science."
+authors = ["Georg Öttl <georg.oettl@gmail.com>"]
+license = "Apache-2.0"
+readme = "README.md"
+homepage = "https://github.com/goettl79/parides"
+repository = "https://github.com/goettl79/parides"
+documentation = "https://github.com/goettl79/parides#usage"
+keywords = [
+    "prometheus", "pandas", "data-science", "time-series", 
+    "metrics", "parquet", "csv", "analysis", "monitoring",
+    "export", "etl", "machine-learning"
+]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Science/Research",
+    "Intended Audience :: Developers",
+    "Topic :: Scientific/Engineering :: Information Analysis",
+    "Topic :: System :: Monitoring",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Operating System :: OS Independent",
+]
+packages = [{include = "parides"}]
+
+[tool.poetry.dependencies]
+python = "^3.10"
+pandas = "^2.0.0"
+requests = "^2.25.0"
+pytz = "^2023.3"
+python-dateutil = "^2.8.2"
+numpy = "^1.24.0"
+pyarrow = "^23.0.1"
+
+[tool.poetry.group.dev.dependencies]
+pytest = "^8.0.0"
+flake8 = "^7.0.0"
+pytest-mock = "^3.15.1"
+
+[tool.poetry.scripts]
+parides = "parides.cli:main"
+
 [build-system]
-requires = [
-    "setuptools>=42",
-    "wheel",
-    "setuptools_scm[toml]>=3.4"
+requires = ["poetry-core>=1.0.0"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.pytest.ini_options]
+testpaths = ["tests/unit"]
+markers = [
+    "integration: marks tests as integration tests (select with '-m integration')",
 ]

@@ -1,6 +1,0 @@
-python-dateutil
-requests
-numpy
-pandas
-pytz
-pytest
