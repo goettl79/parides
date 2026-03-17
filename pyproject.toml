@@ -1,6 +1,6 @@
 [tool.poetry]
 name = "parides"
-version = "0.2.0"
+version = "0.0.0"
 description = "Efficiently convert Prometheus metrics to Pandas DataFrames and Parquet/CSV files for Data Science."
 authors = ["Georg Öttl <georg.oettl@gmail.com>"]
 license = "Apache-2.0"
@@ -36,17 +36,23 @@ python-dateutil = "^2.8.2"
 numpy = "^1.24.0"
 pyarrow = "^23.0.1"
 
+[tool.poetry-dynamic-versioning]
+enable = true
+vcs = "git"
+style = "pep440"
+
 [tool.poetry.group.dev.dependencies]
 pytest = "^8.0.0"
 flake8 = "^7.0.0"
 pytest-mock = "^3.15.1"
+poetry-dynamic-versioning = "^1.2.0"
 
 [tool.poetry.scripts]
 parides = "parides.cli:main"
 
 [build-system]
-requires = ["poetry-core>=1.0.0"]
-build-backend = "poetry.core.masonry.api"
+requires = ["poetry-core>=1.0.0", "poetry-dynamic-versioning>=1.0.0"]
+build-backend = "poetry.dynamic_versioning.backend"
 
 [tool.pytest.ini_options]
 testpaths = ["tests/unit"]
