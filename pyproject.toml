@@ -35,7 +35,7 @@ packages = [{include = "parides"}]
 "Docker Images" = "https://github.com/goettl79/parides/pkgs/container/parides"
 
 [tool.poetry.dependencies]
-python = "^3.10"
+python = ">=3.10"
 pandas = "^2.0.0"
 requests = "^2.25.0"
 pytz = "^2023.3"
