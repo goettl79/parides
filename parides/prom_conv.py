@@ -42,14 +42,78 @@ def _prepare_output_file(directory: str, dataset_id: str, extension: str,
     return file
 
 
+VALID_LAYOUTS = ("wide", "long")
+
+
+def _check_layout(layout: str) -> None:
+    if layout not in VALID_LAYOUTS:
+        raise ValueError(f"layout must be one of {VALID_LAYOUTS}, got {layout!r}")
+
+
+def _trim_slice(df: pd.DataFrame, end_slice: datetime, is_last: bool) -> pd.DataFrame:
+    """Drop rows at the slice end boundary (except for the last slice).
+
+    Prometheus ``query_range`` includes both ends of the window, so the first
+    timestamp of slice N+1 would otherwise duplicate the last timestamp of slice N.
+    """
+    if is_last or df.empty:
+        return df
+    return df[df.index < end_slice]
+
+
+def _align_columns(df: pd.DataFrame, columns: List[str], first_slice: bool) -> pd.DataFrame:
+    """Force every chunk onto the schema of the first chunk.
+
+    Missing columns are filled with NaN. Columns that did not exist in the first
+    chunk cannot be appended to a streaming file; they are dropped with a warning.
+    """
+    if first_slice:
+        return df
+    extra = [c for c in df.columns if c not in columns]
+    if extra:
+        logger.warning("Dropping %d column(s) that first appeared after the first chunk "
+                       "(streaming output has a fixed schema): %s", len(extra), extra)
+    return df.reindex(columns=columns)
+
+
+def _metadata(metrics_query: str, resolution: str, start_time: datetime, end_time: datetime,
+              layout: str) -> Dict[str, str]:
+    return {
+        "parides.query": metrics_query,
+        "parides.step": str(resolution),
+        "parides.start": start_time.isoformat(),
+        "parides.end": end_time.isoformat(),
+        "parides.layout": layout,
+        "parides.timezone": "UTC",
+    }
+
+
+def _iter_slices(url: str, metrics_query: str, start_time: datetime, end_time: datetime,
+                 resolution: str, chunk_size: str, layout: str):
+    """Yield de-duplicated per-chunk DataFrames (possibly empty)."""
+    date_range = prepare_time_slices(end_time=end_time, freq=chunk_size, start_time=start_time)
+    n = len(date_range) - 1
+    for idx in range(n):
+        start_slice = date_range[idx]
+        end_slice = date_range[idx + 1]
+        logger.info(f"Processing chunk {idx+1}/{n}: {start_slice} to {end_slice}")
+        resp = __get_prom_api_response(url, metrics_query,
+                                       start_time=start_slice.isoformat(),
+                                       end_time=end_slice.isoformat(),
+                                       resolution=resolution)
+        df_slice = from_prom_json_to_df(resp.json(), layout=layout)
+        yield _trim_slice(df_slice, end_slice, is_last=(idx == n - 1))
+
+
 def from_prom_to_csv(url: str, metrics_query: str, dataset_id: str = "id", directory: str = "./prom-ts",
                      start_time: Optional[datetime] = None,
                      end_time: Optional[datetime] = None, resolution: str = "1m",
-                     chunk_size: str = "6h") -> str:
+                     chunk_size: str = "6h", layout: str = "wide") -> str:
     """Read Prometheus metrics and save them to a CSV file using streaming.
 
-    This function fetches data in chunks and appends to the CSV file,
-    minimizing memory usage for large exports.
+    Timestamps are written as unambiguous ISO 8601 with a UTC offset
+    (``2024-01-01 00:00:00+00:00``), so ``pd.read_csv(..., parse_dates=['time'])``
+    yields tz-aware UTC values.
 
     Args:
         url: The Prometheus API endpoint.
@@ -60,43 +124,34 @@ def from_prom_to_csv(url: str, metrics_query: str, dataset_id: str = "id", direc
         end_time: Query end time (UTC).
         resolution: Step resolution.
         chunk_size: Size of each data chunk (e.g., "6h").
+        layout: "wide" (one column per metric) or "long" (tidy: metric, labels, value).
 
     Returns:
         The path to the generated CSV file.
     """
+    _check_layout(layout)
     start_time, end_time = _resolve_window(start_time, end_time)
     file = _prepare_output_file(directory, dataset_id, "csv", start_time, end_time)
 
-    date_range = prepare_time_slices(end_time=end_time, freq=chunk_size, start_time=start_time)
+    columns: Optional[List[str]] = None
 
-    any_data = False
-    first_chunk = True
+    try:
+        for df_slice in _iter_slices(url, metrics_query, start_time, end_time,
+                                     resolution, chunk_size, layout):
+            if df_slice.empty:
+                continue
+            first = columns is None
+            if first:
+                columns = list(df_slice.columns)
+            df_slice = _align_columns(df_slice, columns, first)
+            df_slice.to_csv(file, mode='a', header=first)
+    except Exception as e:
+        logger.error(f"Export aborted: {e}")
+        if columns is None:
+            raise
+        raise RuntimeError(f"Export failed after partial write to {file}: {e}") from e
 
-    for idx in range(len(date_range) - 1):
-        start_slice = date_range[idx]
-        end_slice = date_range[idx + 1]
-        logger.info(f"Processing chunk {idx+1}/{len(date_range)-1}: {start_slice} to {end_slice}")
-
-        try:
-            json_query_results = __get_prom_api_response(url, metrics_query,
-                                                         start_time=start_slice.isoformat(),
-                                                         end_time=end_slice.isoformat(),
-                                                         resolution=resolution)
-            df_slice = from_prom_json_to_df(json_query_results.json())
-
-            if not df_slice.empty:
-                any_data = True
-                # Note: Streaming to CSV with mode='a' assumes stable columns across chunks.
-                df_slice.to_csv(file, mode='a', header=first_chunk, date_format="%m/%d/%Y %H:%M:%S")
-                first_chunk = False
-        except Exception as e:
-            logger.error(f"Error processing chunk {start_slice} to {end_slice}: {e}")
-            if any_data:
-                logger.warning("Continuing with remaining chunks...")
-            else:
-                raise
-
-    if not any_data:
+    if columns is None:
         raise ValueError("Prometheus did not return any values for query {}".format(metrics_query))
 
     logger.info("Wrote to " + file)
@@ -106,8 +161,11 @@ def from_prom_to_csv(url: str, metrics_query: str, dataset_id: str = "id", direc
 def from_prom_to_parquet(url: str, metrics_query: str, dataset_id: str = "id", directory: str = "./prom-ts",
                          start_time: Optional[datetime] = None,
                          end_time: Optional[datetime] = None, resolution: str = "1m",
-                         chunk_size: str = "6h") -> str:
+                         chunk_size: str = "6h", layout: str = "wide") -> str:
     """Read Prometheus metrics and save them to a Parquet file using streaming.
+
+    The file carries key/value metadata (query, step, window, layout, timezone)
+    in its schema metadata under the ``parides.*`` keys.
 
     Args:
         url: The Prometheus API endpoint.
@@ -118,49 +176,50 @@ def from_prom_to_parquet(url: str, metrics_query: str, dataset_id: str = "id", d
         end_time: End time.
         resolution: Step resolution.
         chunk_size: Size of each data chunk.
+        layout: "wide" (one column per metric) or "long" (tidy: metric, labels, value).
 
     Returns:
         The path to the generated Parquet file.
     """
     pa, pq = _import_pyarrow()
+    _check_layout(layout)
 
     start_time, end_time = _resolve_window(start_time, end_time)
     file = _prepare_output_file(directory, dataset_id, "parquet", start_time, end_time)
 
-    date_range = prepare_time_slices(end_time=end_time, freq=chunk_size, start_time=start_time)
-
-    any_data = False
+    columns: Optional[List[str]] = None
     writer = None
 
-    for idx in range(len(date_range) - 1):
-        start_slice = date_range[idx]
-        end_slice = date_range[idx + 1]
-        logger.info(f"Processing chunk {idx+1}/{len(date_range)-1}: {start_slice} to {end_slice}")
-
-        try:
-            json_query_results = __get_prom_api_response(url, metrics_query,
-                                                         start_time=start_slice.isoformat(),
-                                                         end_time=end_slice.isoformat(),
-                                                         resolution=resolution)
-            df_slice = from_prom_json_to_df(json_query_results.json())
-
-            if not df_slice.empty:
-                any_data = True
-                table = pa.Table.from_pandas(df_slice)
-                if writer is None:
-                    writer = pq.ParquetWriter(file, table.schema)
-                writer.write_table(table)
-        except Exception as e:
-            logger.error(f"Error processing chunk {start_slice} to {end_slice}: {e}")
-            if any_data:
+    try:
+        for df_slice in _iter_slices(url, metrics_query, start_time, end_time,
+                                     resolution, chunk_size, layout):
+            if df_slice.empty:
                 continue
+            first = columns is None
+            if first:
+                columns = list(df_slice.columns)
+            df_slice = _align_columns(df_slice, columns, first)
+            table = pa.Table.from_pandas(df_slice)
+            if writer is None:
+                meta = dict(table.schema.metadata or {})
+                meta.update({k.encode(): v.encode() for k, v in
+                             _metadata(metrics_query, resolution, start_time, end_time, layout).items()})
+                schema = table.schema.with_metadata(meta)
+                writer = pq.ParquetWriter(file, schema)
             else:
-                raise
+                # An all-NaN column may be inferred as another type; cast to the file schema.
+                table = table.cast(writer.schema)
+            writer.write_table(table)
+    except Exception as e:
+        logger.error(f"Export aborted: {e}")
+        if columns is None:
+            raise
+        raise RuntimeError(f"Export failed after partial write to {file}: {e}") from e
+    finally:
+        if writer:
+            writer.close()
 
-    if writer:
-        writer.close()
-
-    if not any_data:
+    if columns is None:
         raise ValueError("Prometheus did not return any values for query {}".format(metrics_query))
 
     logger.info("Wrote to " + file)
@@ -171,11 +230,8 @@ def from_prom_to_df(url: str, metrics_query: str,
                     start_time: Optional[datetime] = None,
                     end_time: Optional[datetime] = None,
                     resolution: str = "1m",
-                    freq: str = "6h") -> pd.DataFrame:
-    """Fetch Prometheus metrics and convert them to a wide-format Pandas DataFrame.
-
-    Automatically handles time-slicing and aligns multiple time-series into a
-    single tabular structure where metrics are columns and time is the index.
+                    freq: str = "6h", layout: str = "wide") -> pd.DataFrame:
+    """Fetch Prometheus metrics into a Pandas DataFrame indexed by UTC time.
 
     Args:
         url: The Prometheus API endpoint.
@@ -184,24 +240,17 @@ def from_prom_to_df(url: str, metrics_query: str,
         end_time: End time (UTC). Defaults to now.
         resolution: Step resolution (e.g., "1m").
         freq: Slicing frequency (e.g., "6h").
+        layout: "wide" (``id`` column + one column per metric) or "long"
+            (tidy: ``metric``, one column per label, ``value``).
 
     Returns:
         A timezone-aware Pandas DataFrame.
     """
+    _check_layout(layout)
     start_time, end_time = _resolve_window(start_time, end_time)
 
-    date_range = prepare_time_slices(end_time=end_time, freq=freq, start_time=start_time)
-
-    results = []
-    for idx in range(len(date_range) - 1):
-        start_slice = date_range[idx]
-        end_slice = date_range[idx + 1]
-        logger.info(f"Fetching chunk {idx+1}/{len(date_range)-1}: {start_slice} to {end_slice}")
-        json_query_results = __get_prom_api_response(url, metrics_query, start_time=start_slice.isoformat(),
-                                                     end_time=end_slice.isoformat(), resolution=resolution)
-        df_slice = from_prom_json_to_df(json_query_results.json())
-        if not df_slice.empty:
-            results.append(df_slice)
+    results = [df for df in _iter_slices(url, metrics_query, start_time, end_time,
+                                         resolution, freq, layout) if not df.empty]
 
     if not results:
         raise ValueError("Prometheus did not return any values for query {}".format(metrics_query))
@@ -209,23 +258,29 @@ def from_prom_to_df(url: str, metrics_query: str,
     return pd.concat(results, axis=0, join='outer', ignore_index=False)
 
 
-def from_prom_json_to_df(prom_api_response: Dict[str, Any]) -> pd.DataFrame:
-    """Convert raw Prometheus JSON response to a wide-format Pandas DataFrame.
-
-    Optimized for memory and speed by using vectorized operations.
+def from_prom_json_to_df(prom_api_response: Dict[str, Any], layout: str = "wide") -> pd.DataFrame:  # noqa: C901
+    """Convert a raw Prometheus ``query_range`` JSON response to a DataFrame.
 
     Args:
         prom_api_response: The JSON dictionary returned by the Prometheus API.
+        layout: ``"wide"`` - index ``time``, column ``id`` (instance/job/name
+            joined by ``_``) and one float column per metric/label combination.
+            ``"long"`` - tidy format: index ``time``, column ``metric``, one
+            column per label (real values, no flattening) and ``value``.
 
     Returns:
-        A pivoted Pandas DataFrame with 'time' as index and 'id' as a column.
+        A DataFrame with a tz-aware (UTC) ``time`` index, or an empty DataFrame.
     """
+    _check_layout(layout)
     if "data" not in prom_api_response:
         return pd.DataFrame()
 
     prom_metrics = prom_api_response['data']['result']
     if not prom_metrics:
         return pd.DataFrame()
+
+    if layout == "long":
+        return _to_long(prom_metrics)
 
     id_keys = {"instance", "job", "name"}
 
@@ -257,7 +312,7 @@ def from_prom_json_to_df(prom_api_response: Dict[str, Any]) -> pd.DataFrame:
         metric_scrape_id = "_".join(v for k, v in sorted(ids_dict.items()))
 
         for timestamp, value in prom_metric['values']:
-            times.append(int(timestamp))
+            times.append(float(timestamp))
             ids.append(metric_scrape_id)
             metric_names.append(metric_name)
             values.append(float(value))
@@ -272,8 +327,14 @@ def from_prom_json_to_df(prom_api_response: Dict[str, Any]) -> pd.DataFrame:
         'value': values
     })
 
+    # Colliding (time, id, metric) entries cannot be represented in wide format.
+    dup = df.duplicated(subset=['time', 'id', 'metric_name'], keep='last')
+    if dup.any():
+        logger.warning("%d duplicate (time, id, metric) samples; keeping the last. "
+                       "Use layout='long' to retain all label information.", int(dup.sum()))
+        df = df[~dup]
+
     # Pivot to wide format
-    # Optimization: if only one metric name, avoid full pivot_table
     unique_metrics = df['metric_name'].unique()
     if len(unique_metrics) == 1:
         metric_name = unique_metrics[0]
@@ -281,12 +342,42 @@ def from_prom_json_to_df(prom_api_response: Dict[str, Any]) -> pd.DataFrame:
         df.drop(columns=['metric_name'], inplace=True)
         df = df.set_index(['time', 'id'])
     else:
-        df = df.pivot_table(index=['time', 'id'], columns='metric_name', values='value')
+        df = df.pivot(index=['time', 'id'], columns='metric_name', values='value')
+        df.columns.name = None
 
     df = df.reset_index()
     df['time'] = df['time'].dt.tz_localize('UTC')
     df.set_index('time', inplace=True)
     df.sort_index(inplace=True)
+    return df
+
+
+def _to_long(prom_metrics: List[Dict[str, Any]]) -> pd.DataFrame:
+    """Tidy layout: one row per sample, labels kept as real columns."""
+    frames = []
+    for prom_metric in prom_metrics:
+        meta = dict(prom_metric['metric'])
+        name = meta.pop('__name__', '')
+        samples = prom_metric['values']
+        if not samples:
+            continue
+        ts, vals = zip(*samples)
+        frame = pd.DataFrame({
+            'time': pd.to_datetime([float(t) for t in ts], unit='s', utc=True),
+            'metric': name or 'value',
+            'value': [float(v) for v in vals],
+        })
+        for k, v in meta.items():
+            frame[k] = v
+        frames.append(frame)
+
+    if not frames:
+        return pd.DataFrame()
+
+    df = pd.concat(frames, ignore_index=True)
+    label_cols = sorted(c for c in df.columns if c not in ('time', 'metric', 'value'))
+    df = df[['time', 'metric'] + label_cols + ['value']]
+    df = df.set_index('time').sort_index(kind='stable')
     return df
 
 

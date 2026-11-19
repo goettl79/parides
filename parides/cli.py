@@ -59,9 +59,11 @@ def main():
     parser.add_argument("query", nargs="?", help="PromQL query (e.g., 'up' or 'node_cpu_seconds_total')")
 
     parser.add_argument("-o", "--output-directory", help="Directory to write files to.", default="timeseries")
-    parser.add_argument("-r", "--resolution", help="Step resolution (e.g. 1m, 15s, 1h)", default="15s")
+    parser.add_argument("-r", "--resolution", help="Step resolution (e.g. 1m, 15s, 1h)", default="1m")
     parser.add_argument("-f", "--format", choices=["csv", "parquet"], default="csv",
                         help="Output file format.")
+    parser.add_argument("--layout", choices=["wide", "long"], default="wide",
+                        help="wide: one column per metric; long: tidy (metric, label columns, value).")
     parser.add_argument("--dsid", default="prom", help="Dataset ID used in filename.")
     parser.add_argument("--chunk-size", default="6h", help="Time range per chunk for pagination (e.g., 1h, 6h, 1d).")
 
@@ -97,12 +99,12 @@ def main():
             from_prom_to_csv(url=args.URL, metrics_query=args.query, dataset_id=args.dsid,
                              directory=args.output_directory, start_time=start_date,
                              end_time=end_date, resolution=args.resolution,
-                             chunk_size=args.chunk_size)
+                             chunk_size=args.chunk_size, layout=args.layout)
         else:
             from_prom_to_parquet(url=args.URL, metrics_query=args.query, dataset_id=args.dsid,
                                  directory=args.output_directory, start_time=start_date,
                                  end_time=end_date, resolution=args.resolution,
-                                 chunk_size=args.chunk_size)
+                                 chunk_size=args.chunk_size, layout=args.layout)
     except requests.exceptions.ConnectionError:
         print(f"❌ Error: Could not connect to Prometheus at {args.URL}. Is it running?")
         sys.exit(1)

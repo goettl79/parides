@@ -153,3 +153,128 @@ def test_mocked_convert_error_response(mocker, status_code, error_text):
     
     with pytest.raises(RuntimeError, match=f"Status: {status_code}"):
         from_prom_to_df("http://localhost:9090", "up")
+
+
+def _matrix(series):
+    """series: list of (labels, [(ts, value), ...])"""
+    return {"status": "success", "data": {"resultType": "matrix", "result": [
+        {"metric": m, "values": [[t, str(v)] for t, v in vals]} for m, vals in series]}}
+
+
+def _mock_chunks(mocker, responses):
+    mock_get = mocker.patch('requests.get')
+    mock_get.return_value.ok = True
+    mock_get.return_value.json.side_effect = responses
+
+
+T0 = datetime(2024, 1, 1, tzinfo=timezone.utc)
+T1 = datetime(2024, 1, 1, 0, 2, tzinfo=timezone.utc)
+B = int(T0.timestamp())
+
+
+def test_chunk_boundary_not_duplicated(mocker):
+    _mock_chunks(mocker, [
+        _matrix([({"__name__": "up", "instance": "a"}, [(B, 1), (B + 60, 1)])]),
+        _matrix([({"__name__": "up", "instance": "a"}, [(B + 60, 1), (B + 120, 1)])]),
+    ])
+    df = from_prom_to_df("http://mock", "up", start_time=T0, end_time=T1, freq="1min")
+    assert len(df) == 3
+    assert not df.index.duplicated().any()
+
+
+def test_long_layout_keeps_labels_as_columns():
+    resp = _matrix([({"__name__": "cpu", "instance": "a", "mode": "idle"}, [(B, 1)]),
+                    ({"__name__": "cpu", "instance": "b", "mode": "user"}, [(B, 2)])])
+    df = from_prom_json_to_df(resp, layout="long")
+    assert list(df.columns) == ["metric", "instance", "mode", "value"]
+    assert df.index.tz is not None
+    assert set(df["mode"]) == {"idle", "user"}
+
+
+def test_invalid_layout_rejected():
+    with pytest.raises(ValueError):
+        from_prom_json_to_df({}, layout="tall")
+
+
+def test_csv_timestamps_iso_utc_roundtrip(mocker, tmp_path):
+    _mock_chunks(mocker, [_matrix([({"__name__": "up", "instance": "a"}, [(B, 1)])])])
+    path = from_prom_to_csv("http://mock", "up", directory=str(tmp_path),
+                            start_time=T0, end_time=T1, chunk_size="6h")
+    df = pd.read_csv(path, parse_dates=["time"], index_col="time")
+    assert str(df.index.tz) == "UTC"
+    assert df.index[0] == pd.Timestamp(T0)
+
+
+def test_schema_drift_across_chunks_is_aligned(mocker, tmp_path):
+    _mock_chunks(mocker, [
+        _matrix([({"__name__": "m", "k": "x"}, [(B, 1)]), ({"__name__": "m", "k": "y"}, [(B, 2)])]),
+        _matrix([({"__name__": "m", "k": "x"}, [(B + 60, 3)])]),
+    ])
+    path = from_prom_to_parquet("http://mock", "m", directory=str(tmp_path),
+                                start_time=T0, end_time=T1, chunk_size="1min")
+    df = pd.read_parquet(path)
+    assert len(df) == 2  # series share one (empty) id, so they align on time
+    assert df["m:k_y"].isna().sum() == 1
+    import pyarrow.parquet as pq
+    assert pq.read_schema(path).metadata[b"parides.layout"] == b"wide"
+
+
+def _three_chunk_responses():
+    s = {"__name__": "up", "instance": "a", "job": "j"}
+    return [
+        _matrix([(s, [(B, 1), (B + 60, 2)])]),
+        _matrix([(s, [(B + 60, 2), (B + 120, 3)])]),
+        _matrix([(s, [(B + 120, 3), (B + 180, 4)])]),
+    ]
+
+
+T3 = datetime(2024, 1, 1, 0, 3, tzinfo=timezone.utc)
+
+
+def test_parquet_metadata_values(mocker, tmp_path):
+    import pyarrow.parquet as pq
+    _mock_chunks(mocker, _three_chunk_responses())
+    path = from_prom_to_parquet("http://mock", "up", directory=str(tmp_path), start_time=T0,
+                                end_time=T3, resolution="1m", chunk_size="1min", layout="long")
+    meta = pq.read_schema(path).metadata
+    assert meta[b"parides.query"] == b"up"
+    assert meta[b"parides.step"] == b"1m"
+    assert meta[b"parides.layout"] == b"long"
+    assert meta[b"parides.timezone"] == b"UTC"
+    assert meta[b"parides.start"] == T0.isoformat().encode()
+    assert meta[b"parides.end"] == T3.isoformat().encode()
+    assert b"pandas" in meta  # pandas round-trip metadata preserved
+
+
+def test_multi_chunk_parquet_no_dupes_and_ordered(mocker, tmp_path):
+    _mock_chunks(mocker, _three_chunk_responses())
+    path = from_prom_to_parquet("http://mock", "up", directory=str(tmp_path), start_time=T0,
+                                end_time=T3, chunk_size="1min")
+    df = pd.read_parquet(path)
+    assert df["up"].tolist() == [1, 2, 3, 4]
+    assert df.index.is_monotonic_increasing
+    assert str(df.index.tz) == "UTC"
+
+
+def test_multi_chunk_csv_single_header_no_dupes(mocker, tmp_path):
+    _mock_chunks(mocker, _three_chunk_responses())
+    path = from_prom_to_csv("http://mock", "up", directory=str(tmp_path), start_time=T0,
+                            end_time=T3, chunk_size="1min")
+    lines = Path(path).read_text().splitlines()
+    assert sum(l.startswith("time,") for l in lines) == 1
+    assert len(lines) == 5
+
+
+def test_multi_chunk_long_layout_df(mocker):
+    _mock_chunks(mocker, _three_chunk_responses())
+    df = from_prom_to_df("http://mock", "up", start_time=T0, end_time=T3, freq="1min", layout="long")
+    assert df["value"].tolist() == [1, 2, 3, 4]
+    assert list(df.columns) == ["metric", "instance", "job", "value"]
+
+
+def test_multi_chunk_error_after_partial_write_raises(mocker, tmp_path):
+    good = _three_chunk_responses()[0]
+    _mock_chunks(mocker, [good, RuntimeError("boom")])
+    with pytest.raises(RuntimeError, match="partial write"):
+        from_prom_to_csv("http://mock", "up", directory=str(tmp_path), start_time=T0,
+                         end_time=T3, chunk_size="1min")

@@ -69,6 +69,8 @@ docker run -v $(pwd)/data:/app/timeseries \
 *   **Zero-Config Alignment:** Pivots long-format JSON into wide-format tables (features as columns, time as rows) — exactly what `scikit-learn` or `PyTorch` expect.
 *   **Timezone Safe:** All timestamps are strictly converted to UTC to prevent catastrophic time-shifting bugs in your models.
 *   **Big Data Ready:** CLI uses streaming writes (CSV/Parquet) to handle datasets larger than your system RAM.
+*   **Two Layouts:** `--layout wide` (default; one column per metric) or `--layout long` (tidy: `metric`, one column per label, `value`).
+*   **Self-describing Parquet:** query, step, window, layout and timezone are stored in the file metadata (`parides.*` keys).
 
 ---
 
