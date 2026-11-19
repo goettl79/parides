@@ -52,7 +52,6 @@ style = "pep440"
 pytest = "^8.0.0"
 flake8 = "^7.0.0"
 pytest-mock = "^3.15.1"
-poetry-dynamic-versioning = "^1.2.0"
 
 [tool.poetry.scripts]
 parides = "parides.cli:main"
