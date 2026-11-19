@@ -1,11 +1,18 @@
 #!/usr/bin/env python
 import argparse
 import sys
-from datetime import timezone
-import dateutil.parser
+from datetime import datetime, timezone
 import requests
 
 from parides.prom_conv import from_prom_to_csv, from_prom_to_parquet
+
+
+def parse_date(value):
+    """Parse an ISO 8601 date/time string (a trailing 'Z' means UTC)."""
+    try:
+        return datetime.fromisoformat(value.strip().replace("Z", "+00:00"))
+    except ValueError:
+        raise argparse.ArgumentTypeError(f"invalid ISO 8601 date: {value!r}")
 
 
 def get_interactive_input(prompt, default=None):
@@ -58,9 +65,9 @@ def main():
     parser.add_argument("--dsid", default="prom", help="Dataset ID used in filename.")
     parser.add_argument("--chunk-size", default="6h", help="Time range per chunk for pagination (e.g., 1h, 6h, 1d).")
 
-    parser.add_argument("-s", "--start-date", type=lambda d: dateutil.parser.parse(d),
+    parser.add_argument("-s", "--start-date", type=parse_date,
                         help="Start date (ISO 8601). Defaults to 10m ago.")
-    parser.add_argument("-e", "--end-date", type=lambda d: dateutil.parser.parse(d),
+    parser.add_argument("-e", "--end-date", type=parse_date,
                         help="End date (ISO 8601). Defaults to now.")
 
     # If no arguments at all, run wizard

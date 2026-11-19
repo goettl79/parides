@@ -38,10 +38,10 @@ packages = [{include = "parides"}]
 python = ">=3.10,<4.0"
 pandas = "^2.0.0"
 requests = "^2.25.0"
-pytz = "^2023.3"
-python-dateutil = "^2.8.2"
-numpy = "^1.24.0"
-pyarrow = "^23.0.1"
+pyarrow = {version = ">=15", optional = true}
+
+[tool.poetry.extras]
+parquet = ["pyarrow"]
 
 [tool.poetry-dynamic-versioning]
 enable = true

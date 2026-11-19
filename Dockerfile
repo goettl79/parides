@@ -9,7 +9,7 @@ ENV POETRY_NO_INTERACTION=1 \
     PYTHONUNBUFFERED=1
 
 # Install poetry
-RUN pip install poetry==1.7.1
+RUN pip install "poetry>=2,<3"
 
 WORKDIR /app
 
@@ -18,7 +18,7 @@ COPY pyproject.toml poetry.lock README.md ./
 COPY parides ./parides
 
 # Install production dependencies and the project itself
-RUN poetry install --only main
+RUN poetry install --only main --extras parquet
 
 # Final Stage
 FROM python:3.12-slim

@@ -15,7 +15,8 @@
 ## 🚀 Quick Start
 
 ```bash
-pip install parides
+pip install parides            # CSV output
+pip install "parides[parquet]"  # + Parquet output
 ```
 
 ---
@@ -41,7 +42,8 @@ df.plot()
 High-performance extraction to **Parquet** or **CSV**. Use `--chunk-size` to bypass Prometheus API limits for large exports.
 
 ```bash
-pip install parides
+pip install parides            # CSV output
+pip install "parides[parquet]"  # + Parquet output
 
 # Export 3 months of data in 1-day chunks to avoid timeouts
 parides http://localhost:9090 'node_cpu_seconds_total' \

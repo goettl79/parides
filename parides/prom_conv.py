@@ -5,12 +5,20 @@ from datetime import datetime, timezone, timedelta
 from typing import Optional, List, Any, Dict, Union
 
 import pandas as pd
-import pytz
 import requests
 
 logger = logging.getLogger(__name__)
 
 REQUEST_TIMEOUT_SECONDS = 60
+
+
+def _import_pyarrow():
+    try:
+        import pyarrow as pa
+        import pyarrow.parquet as pq
+    except ImportError as e:
+        raise ImportError("Parquet output requires pyarrow: pip install 'parides[parquet]'") from e
+    return pa, pq
 
 
 def _resolve_window(start_time: Optional[datetime], end_time: Optional[datetime]):
@@ -114,8 +122,7 @@ def from_prom_to_parquet(url: str, metrics_query: str, dataset_id: str = "id", d
     Returns:
         The path to the generated Parquet file.
     """
-    import pyarrow as pa
-    import pyarrow.parquet as pq
+    pa, pq = _import_pyarrow()
 
     start_time, end_time = _resolve_window(start_time, end_time)
     file = _prepare_output_file(directory, dataset_id, "parquet", start_time, end_time)
@@ -285,10 +292,10 @@ def from_prom_json_to_df(prom_api_response: Dict[str, Any]) -> pd.DataFrame:
 
 def prepare_time_slices(start_time: datetime, end_time: datetime, freq: str) -> List[datetime]:
     # Naive datetimes are assumed UTC; aware ones are converted (not relabelled).
-    start_time = start_time.replace(tzinfo=pytz.UTC) if start_time.tzinfo is None else start_time.astimezone(pytz.UTC)
-    end_time = end_time.replace(tzinfo=pytz.UTC) if end_time.tzinfo is None else end_time.astimezone(pytz.UTC)
+    start_time = start_time.replace(tzinfo=timezone.utc) if start_time.tzinfo is None else start_time.astimezone(timezone.utc)
+    end_time = end_time.replace(tzinfo=timezone.utc) if end_time.tzinfo is None else end_time.astimezone(timezone.utc)
 
-    date_range = pd.to_datetime(pd.date_range(start=start_time, end=end_time, freq=freq, tz=pytz.UTC)).tolist()
+    date_range = pd.to_datetime(pd.date_range(start=start_time, end=end_time, freq=freq, tz=timezone.utc)).tolist()
 
     # Ensure start and end are included and range is covered
     if not date_range or date_range[0] > start_time:
