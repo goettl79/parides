@@ -144,3 +144,7 @@ cython_debug/
 .DS_Store
 
 node_modules/
+
+# Generated output
+timeseries/
+tests/container_metrics/

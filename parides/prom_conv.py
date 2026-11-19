@@ -10,6 +10,29 @@ import requests
 
 logger = logging.getLogger(__name__)
 
+REQUEST_TIMEOUT_SECONDS = 60
+
+
+def _resolve_window(start_time: Optional[datetime], end_time: Optional[datetime]):
+    """Apply defaults (last 10 minutes) for a missing query window."""
+    if end_time is None:
+        end_time = datetime.now(timezone.utc)
+    if start_time is None:
+        start_time = end_time - timedelta(minutes=10)
+    return start_time, end_time
+
+
+def _prepare_output_file(directory: str, dataset_id: str, extension: str,
+                         start_time: datetime, end_time: datetime) -> str:
+    """Create the target directory and return a fresh output path."""
+    time_id_prefix = "{}-{}".format(start_time.timestamp(), end_time.timestamp())
+    prefix = hashlib.sha1(time_id_prefix.encode("UTF-8")).hexdigest()[:4]
+    os.makedirs(directory, exist_ok=True)
+    file = os.path.join(directory, f"{dataset_id}_X_{prefix}.{extension}")
+    if os.path.exists(file):
+        os.remove(file)
+    return file
+
 
 def from_prom_to_csv(url: str, metrics_query: str, dataset_id: str = "id", directory: str = "./prom-ts",
                      start_time: Optional[datetime] = None,
@@ -17,7 +40,7 @@ def from_prom_to_csv(url: str, metrics_query: str, dataset_id: str = "id", direc
                      chunk_size: str = "6h") -> str:
     """Read Prometheus metrics and save them to a CSV file using streaming.
 
-    This function fetches data in chunks and appends to the CSV file, 
+    This function fetches data in chunks and appends to the CSV file,
     minimizing memory usage for large exports.
 
     Args:
@@ -33,40 +56,26 @@ def from_prom_to_csv(url: str, metrics_query: str, dataset_id: str = "id", direc
     Returns:
         The path to the generated CSV file.
     """
-    if start_time is None:
-        start_time = datetime.now(timezone.utc) - timedelta(minutes=10)
-    if end_time is None:
-        end_time = datetime.now(timezone.utc)
-
-    time_id_prefix = "{}-{}".format(start_time.timestamp(), end_time.timestamp())
-    prefix = hashlib.sha1(time_id_prefix.encode("UTF-8")).hexdigest()[:4]
-
-    if not os.path.exists(directory):
-        os.makedirs(directory, exist_ok=True)
-
-    file = os.path.join(directory, f"{dataset_id}_X_{prefix}.csv")
-    
-    # Remove file if it exists to start fresh
-    if os.path.exists(file):
-        os.remove(file)
+    start_time, end_time = _resolve_window(start_time, end_time)
+    file = _prepare_output_file(directory, dataset_id, "csv", start_time, end_time)
 
     date_range = prepare_time_slices(end_time=end_time, freq=chunk_size, start_time=start_time)
-    
+
     any_data = False
     first_chunk = True
-    
+
     for idx in range(len(date_range) - 1):
         start_slice = date_range[idx]
         end_slice = date_range[idx + 1]
         logger.info(f"Processing chunk {idx+1}/{len(date_range)-1}: {start_slice} to {end_slice}")
-        
+
         try:
-            json_query_results = __get_prom_api_response(url, metrics_query, 
+            json_query_results = __get_prom_api_response(url, metrics_query,
                                                          start_time=start_slice.isoformat(),
-                                                         end_time=end_slice.isoformat(), 
+                                                         end_time=end_slice.isoformat(),
                                                          resolution=resolution)
             df_slice = from_prom_json_to_df(json_query_results.json())
-            
+
             if not df_slice.empty:
                 any_data = True
                 # Note: Streaming to CSV with mode='a' assumes stable columns across chunks.
@@ -87,9 +96,9 @@ def from_prom_to_csv(url: str, metrics_query: str, dataset_id: str = "id", direc
 
 
 def from_prom_to_parquet(url: str, metrics_query: str, dataset_id: str = "id", directory: str = "./prom-ts",
-                        start_time: Optional[datetime] = None,
-                        end_time: Optional[datetime] = None, resolution: str = "1m",
-                        chunk_size: str = "6h") -> str:
+                         start_time: Optional[datetime] = None,
+                         end_time: Optional[datetime] = None, resolution: str = "1m",
+                         chunk_size: str = "6h") -> str:
     """Read Prometheus metrics and save them to a Parquet file using streaming.
 
     Args:
@@ -108,39 +117,26 @@ def from_prom_to_parquet(url: str, metrics_query: str, dataset_id: str = "id", d
     import pyarrow as pa
     import pyarrow.parquet as pq
 
-    if start_time is None:
-        start_time = datetime.now(timezone.utc) - timedelta(minutes=10)
-    if end_time is None:
-        end_time = datetime.now(timezone.utc)
-
-    time_id_prefix = "{}-{}".format(start_time.timestamp(), end_time.timestamp())
-    prefix = hashlib.sha1(time_id_prefix.encode("UTF-8")).hexdigest()[:4]
-
-    if not os.path.exists(directory):
-        os.makedirs(directory, exist_ok=True)
-
-    file = os.path.join(directory, f"{dataset_id}_X_{prefix}.parquet")
-    
-    if os.path.exists(file):
-        os.remove(file)
+    start_time, end_time = _resolve_window(start_time, end_time)
+    file = _prepare_output_file(directory, dataset_id, "parquet", start_time, end_time)
 
     date_range = prepare_time_slices(end_time=end_time, freq=chunk_size, start_time=start_time)
-    
+
     any_data = False
     writer = None
-    
+
     for idx in range(len(date_range) - 1):
         start_slice = date_range[idx]
         end_slice = date_range[idx + 1]
         logger.info(f"Processing chunk {idx+1}/{len(date_range)-1}: {start_slice} to {end_slice}")
-        
+
         try:
-            json_query_results = __get_prom_api_response(url, metrics_query, 
+            json_query_results = __get_prom_api_response(url, metrics_query,
                                                          start_time=start_slice.isoformat(),
-                                                         end_time=end_slice.isoformat(), 
+                                                         end_time=end_slice.isoformat(),
                                                          resolution=resolution)
             df_slice = from_prom_json_to_df(json_query_results.json())
-            
+
             if not df_slice.empty:
                 any_data = True
                 table = pa.Table.from_pandas(df_slice)
@@ -171,7 +167,7 @@ def from_prom_to_df(url: str, metrics_query: str,
                     freq: str = "6h") -> pd.DataFrame:
     """Fetch Prometheus metrics and convert them to a wide-format Pandas DataFrame.
 
-    Automatically handles time-slicing and aligns multiple time-series into a 
+    Automatically handles time-slicing and aligns multiple time-series into a
     single tabular structure where metrics are columns and time is the index.
 
     Args:
@@ -185,10 +181,7 @@ def from_prom_to_df(url: str, metrics_query: str,
     Returns:
         A timezone-aware Pandas DataFrame.
     """
-    if start_time is None:
-        start_time = datetime.now(timezone.utc) - timedelta(minutes=10)
-    if end_time is None:
-        end_time = datetime.now(timezone.utc)
+    start_time, end_time = _resolve_window(start_time, end_time)
 
     date_range = prepare_time_slices(end_time=end_time, freq=freq, start_time=start_time)
 
@@ -228,7 +221,7 @@ def from_prom_json_to_df(prom_api_response: Dict[str, Any]) -> pd.DataFrame:
         return pd.DataFrame()
 
     id_keys = {"instance", "job", "name"}
-    
+
     times = []
     ids = []
     metric_names = []
@@ -291,17 +284,18 @@ def from_prom_json_to_df(prom_api_response: Dict[str, Any]) -> pd.DataFrame:
 
 
 def prepare_time_slices(start_time: datetime, end_time: datetime, freq: str) -> List[datetime]:
-    start_time = start_time.replace(tzinfo=pytz.UTC)
-    end_time = end_time.replace(tzinfo=pytz.UTC)
-    
+    # Naive datetimes are assumed UTC; aware ones are converted (not relabelled).
+    start_time = start_time.replace(tzinfo=pytz.UTC) if start_time.tzinfo is None else start_time.astimezone(pytz.UTC)
+    end_time = end_time.replace(tzinfo=pytz.UTC) if end_time.tzinfo is None else end_time.astimezone(pytz.UTC)
+
     date_range = pd.to_datetime(pd.date_range(start=start_time, end=end_time, freq=freq, tz=pytz.UTC)).tolist()
-    
+
     # Ensure start and end are included and range is covered
     if not date_range or date_range[0] > start_time:
         date_range.insert(0, start_time)
     if date_range[-1] < end_time:
         date_range.append(end_time)
-        
+
     return date_range
 
 
@@ -320,11 +314,11 @@ def __get_prom_api_response(url: str,
                             params={'query': query,
                                     'start': start_time,
                                     'end': end_time,
-                                    'step': resolution})
+                                    'step': resolution},
+                            timeout=REQUEST_TIMEOUT_SECONDS)
     if response.ok:
         return response
     else:
         msg = "Status: {0} Text: {1}".format(response.status_code, response.text)
         logger.error(msg)
         raise RuntimeError(msg)
-
