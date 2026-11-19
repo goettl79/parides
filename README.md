@@ -12,12 +12,22 @@
 
 **Parides** is a high-performance bridge between Prometheus and the Data Science stack. It automatically handles pagination, pivoting, and tabular alignment, delivering perfectly formatted data for machine learning and statistical analysis.
 
-## 🚀 Quick Start
+## 🚀 Quick Start: Prometheus → Parquet in 2 steps
 
 ```bash
-pip install parides            # CSV output
-pip install "parides[parquet]"  # + Parquet output
+pip install "parides[parquet]"
+parides http://localhost:9090 'up' --format parquet
 ```
+
+That's it. The last 10 minutes of `up` are written to `./timeseries/prom_X_<hash>.parquet`. Load it:
+
+```python
+import pandas as pd
+df = pd.read_parquet("timeseries/prom_X_xxxx.parquet")   # UTC time index, one column per metric
+```
+
+Want a different time range? Add `--start-date 2024-01-01T00:00:00Z --end-date 2024-01-08T00:00:00Z`.
+Prefer prompts? Run `parides` with no arguments for an interactive wizard.
 
 ---
 
@@ -42,9 +52,6 @@ df.plot()
 High-performance extraction to **Parquet** or **CSV**. Use `--chunk-size` to bypass Prometheus API limits for large exports.
 
 ```bash
-pip install parides            # CSV output
-pip install "parides[parquet]"  # + Parquet output
-
 # Export 3 months of data in 1-day chunks to avoid timeouts
 parides http://localhost:9090 'node_cpu_seconds_total' \
     --start-date "2024-01-01T00:00:00Z" \
